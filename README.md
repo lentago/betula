@@ -1,15 +1,16 @@
 # firewalla-axiom-pipeline
 
-Ship DNS and connection flow logs from a Firewalla Gold SE to [Axiom](https://axiom.co) for long-term retention, search, and dashboarding — at zero recurring cost.
+Ship DNS, connection flow, and TLS handshake logs from a Firewalla Gold SE to [Axiom](https://axiom.co) for long-term retention, search, and dashboarding — at zero recurring cost.
 
 **Authorship:** The Fluent Bit configs, bash scripts, APL queries, and documentation in this repo are co-written with [Claude](https://claude.ai) (Anthropic). I direct the work and review the output; Claude writes the code. I'm an infrastructure operator, not a software engineer — please don't read this repo as a portfolio of coding ability.
 
 ## What this does
 
-Your Firewalla app shows you what domains each device visits, but the data rotates off the device quickly. This pipeline captures that same data (Zeek DNS and connection logs) and ships it to Axiom's cloud, giving you:
+Your Firewalla app shows you what domains each device visits, but the data rotates off the device quickly. This pipeline captures that same data (Zeek DNS, connection, and SSL logs) and ships it to Axiom's cloud, giving you:
 
-- **30-day searchable history** of every DNS query on your network
-- **Per-device drill-down** dashboards (select a device, see its domains)
+- **30-day searchable history** of every DNS query, flow, and TLS handshake on your network
+- **Per-device drill-down** dashboards (select a device, see its domains and TLS SNIs)
+- **HTTPS visibility** via SSL/TLS handshake metadata (SNI, cert chain fingerprints) — what was actually connected to, not just looked up
 - **Device name resolution** via automated Redis inventory export
 - **Firmware-update resilience** using Firewalla's `post_main.d` persistence
 - **~50 MB RAM overhead** on the Firewalla
