@@ -152,15 +152,34 @@ The shipped `fluent-bit.conf` has **two outputs** active:
 | Output | Destination | Purpose |
 |---|---|---|
 | `[OUTPUT] http` (line ~111) | Axiom HTTPS API | Long-retention search, dashboards, primary durable copy |
-| `[OUTPUT] loki` (line ~134) | LAN Loki receiver at `192.168.139.20:3100` | Live dashboards / alerting via Grafana Cloud (relayed by an Alloy container in [homelab-observability](https://github.com/PitziLabs/homelab-observability)) |
+| `[OUTPUT] loki` (line ~140) | Grafana Cloud Loki (direct push, TLS 443) | Live dashboards / alerting via Grafana Cloud; credentials from `GRAFANA_CLOUD_LOGS_*` env vars |
 
 The two outputs are independent — each retries on its own, and an outage on one side does not affect the other. `Retry_Limit False` on both means a peer outage self-heals without operator intervention once connectivity returns (the fix from [#43](https://github.com/PitziLabs/firewalla-axiom-pipeline/issues/43)).
 
-If you don't run a LAN Loki receiver, either:
-- Edit the Loki block's `Host`/`Port` to point at your own Loki/Promtail/Vector endpoint, or
+If you don't use Grafana Cloud Loki, either:
+- Replace the `GRAFANA_CLOUD_LOGS_*` values with your own Loki/Promtail/Vector endpoint credentials, or
 - Comment out the `[OUTPUT] loki` block entirely.
 
-The Loki output is the one place in this repo where a LAN-specific address (`192.168.139.20`) is baked into config — if you're using this template on a different network, this is the line to change.
+### Loki output contract
+
+The `[OUTPUT] loki` block attaches a fixed set of stream labels to every log line. The [PitziLabs/homelab-observability](https://github.com/PitziLabs/homelab-observability) dashboards and alert rules query these labels by name — **changing any of them silently breaks the consumer** (mismatches produce empty panels, not errors).
+
+**Stream labels on every event:**
+
+| Label | Value(s) | How it's set |
+|-------|----------|--------------|
+| `job` | `firewalla` | Static — `Labels job=firewalla` directive |
+| `cluster` | `homelab` | Static — `Labels cluster=homelab` directive |
+| `log_source` | `zeek_dns` · `zeek_conn` · `zeek_ssl` · `firewalla_acl` | Promoted from the record field via `Label_keys $log_source`; value is set per-stream by the `[FILTER] modify` blocks above |
+
+**Wire format:** Fluent Bit `loki` output plugin, body gzip-compressed, delivered over HTTPS (port 443, TLS verify on). Auth is HTTP Basic Auth (`GRAFANA_CLOUD_LOGS_USER` / `GRAFANA_CLOUD_LOGS_TOKEN`).
+
+**Endpoint:** `${GRAFANA_CLOUD_LOGS_HOST}:443` (e.g. `logs-prod-042.grafana.net`). All three `GRAFANA_CLOUD_LOGS_*` variables must be present in `log_shipping.env` for the output to authenticate. See `env.example` for the format.
+
+**Adapting for a different Loki destination:**
+- Self-hosted Loki / Promtail / Vector: change `Host` and `Port`, remove `TLS on`/`TLS.Verify on`, remove `HTTP_User`/`HTTP_Passwd`.
+- Disable Loki entirely (Axiom only): comment out the `[OUTPUT] loki` block.
+- Adding or renaming a `log_source` value: update the homelab-observability Grafana queries to match — schema is enforced nowhere.
 
 ## Firewalla internals
 
