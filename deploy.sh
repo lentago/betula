@@ -78,6 +78,7 @@ if copy_if_changed fluent-bit/parsers.conf "${FW_CONFIG}/parsers.conf"; then
     fluent_restart_needed=true
 fi
 copy_if_changed scripts/device_lookup_export.sh "${FW_CONFIG}/device_lookup_export.sh" || true
+copy_if_changed scripts/system_metrics_export.sh "${FW_CONFIG}/system_metrics_export.sh" || true
 copy_if_changed scripts/rotate_logs.sh "${FW_CONFIG}/rotate_logs.sh" || true
 if copy_if_changed scripts/start_log_shipping.sh "${FW_CONFIG}/post_main.d/start_log_shipping.sh"; then
     fluent_restart_needed=true
@@ -93,7 +94,7 @@ fi
 # --- Set permissions ---------------------------------------------------------
 echo "[3/5] Setting permissions..."
 ssh "${FW_USER}@${FW_IP}" \
-    "chmod +x ${FW_CONFIG}/post_main.d/start_log_shipping.sh ${FW_CONFIG}/device_lookup_export.sh ${FW_CONFIG}/rotate_logs.sh"
+    "chmod +x ${FW_CONFIG}/post_main.d/start_log_shipping.sh ${FW_CONFIG}/device_lookup_export.sh ${FW_CONFIG}/system_metrics_export.sh ${FW_CONFIG}/rotate_logs.sh"
 
 # --- Start or restart the pipeline conditionally -----------------------------
 echo "[4/5] Managing Fluent Bit container..."
