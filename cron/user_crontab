@@ -21,6 +21,11 @@
 # Also restarts container if it's stopped/missing.
 */5 * * * * /home/pi/.firewalla/config/fluent_bit_healthcheck.sh 2>&1
 
+# Rotate pipeline log files daily (1 MB cap per file; keeps one .log.1 backup).
+# Handles bspool_cleanup.log, device_lookup.log, and fluent-bit-restart.log.
+# fluent-bit-healthcheck.log is self-rotating inside fluent_bit_healthcheck.sh.
+0 2 * * * /home/pi/.firewalla/config/rotate_logs.sh
+
 # GitOps: pull origin/main, validate, swap live files + restart container on
 # diff. Silent when up-to-date. See scripts/gitops-sync.sh and README §GitOps.
 */5 * * * * /home/pi/.firewalla/firewalla-axiom-pipeline/scripts/gitops-sync.sh 2>&1
