@@ -185,11 +185,12 @@ main() {
     # device_lookup_export.sh and fluent_bit_healthcheck.sh live directly in
     # config/. start_log_shipping.sh lives in config/post_main.d/.
     mkdir -p "${LIVE_DIR}/post_main.d"
-    [[ -f "${CLONE_PATH}/scripts/device_lookup_export.sh" ]]    && cp "${CLONE_PATH}/scripts/device_lookup_export.sh"    "${LIVE_DIR}/device_lookup_export.sh"
-    [[ -f "${CLONE_PATH}/scripts/device_group_upload.sh"   ]]   && cp "${CLONE_PATH}/scripts/device_group_upload.sh"     "${LIVE_DIR}/device_group_upload.sh"
-    [[ -f "${CLONE_PATH}/scripts/fluent_bit_healthcheck.sh" ]]  && cp "${CLONE_PATH}/scripts/fluent_bit_healthcheck.sh"  "${LIVE_DIR}/fluent_bit_healthcheck.sh"
-    [[ -f "${CLONE_PATH}/scripts/rotate_logs.sh"            ]]  && cp "${CLONE_PATH}/scripts/rotate_logs.sh"             "${LIVE_DIR}/rotate_logs.sh"
-    [[ -f "${CLONE_PATH}/scripts/start_log_shipping.sh"     ]]  && cp "${CLONE_PATH}/scripts/start_log_shipping.sh"      "${LIVE_DIR}/post_main.d/start_log_shipping.sh"
+    [[ -f "${CLONE_PATH}/scripts/device_lookup_export.sh"    ]] && cp "${CLONE_PATH}/scripts/device_lookup_export.sh"    "${LIVE_DIR}/device_lookup_export.sh"
+    [[ -f "${CLONE_PATH}/scripts/device_group_upload.sh"    ]] && cp "${CLONE_PATH}/scripts/device_group_upload.sh"     "${LIVE_DIR}/device_group_upload.sh"
+    [[ -f "${CLONE_PATH}/scripts/fluent_bit_healthcheck.sh" ]] && cp "${CLONE_PATH}/scripts/fluent_bit_healthcheck.sh"  "${LIVE_DIR}/fluent_bit_healthcheck.sh"
+    [[ -f "${CLONE_PATH}/scripts/system_metrics_export.sh"  ]] && cp "${CLONE_PATH}/scripts/system_metrics_export.sh"   "${LIVE_DIR}/system_metrics_export.sh"
+    [[ -f "${CLONE_PATH}/scripts/rotate_logs.sh"            ]] && cp "${CLONE_PATH}/scripts/rotate_logs.sh"             "${LIVE_DIR}/rotate_logs.sh"
+    [[ -f "${CLONE_PATH}/scripts/start_log_shipping.sh"     ]] && cp "${CLONE_PATH}/scripts/start_log_shipping.sh"      "${LIVE_DIR}/post_main.d/start_log_shipping.sh"
     chmod +x "${LIVE_DIR}"/*.sh "${LIVE_DIR}/post_main.d/"*.sh 2>/dev/null || true
     log INFO "Synced scripts to ${LIVE_DIR}"
   fi

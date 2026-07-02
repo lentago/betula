@@ -124,6 +124,7 @@ firewalla-axiom-pipeline/
 │   ├── start_log_shipping.sh            # Docker bootstrap (post_main.d)
 │   ├── device_lookup_export.sh          # Redis → Axiom device inventory
 │   ├── device_group_upload.sh           # Group metadata helper
+│   ├── system_metrics_export.sh         # Host + Zeek process metrics → Axiom (cron)
 │   ├── fluent_bit_healthcheck.sh        # Wedged-container restarter (cron)
 │   ├── gitops-sync.sh                   # 5-min poll → fetch → validate → reload
 │   └── bootstrap.sh                     # One-time on-device setup
@@ -144,6 +145,19 @@ See [dashboards/axiom-queries.md](dashboards/axiom-queries.md) for the complete 
 - Per-device domain breakdown (with device name resolution)
 - DNS activity over time
 - Dashboard filter bar configuration for device drill-down
+
+## System metrics export
+
+`scripts/system_metrics_export.sh` runs every 5 minutes from `cron/user_crontab` and posts a small batch of metrics events to `${AXIOM_DATASET}` alongside the Zeek log events. Each batch contains:
+
+- **One event per Zeek process** (`metric_scope: "zeek_process"`) — role (manager/proxy/worker), interface (`br0`/`br1`/`wg0`), PID, RSS (KB), VSZ (KB), and CPU%.
+- **One box-level snapshot** (`metric_scope: "host"`) — total/used/available memory (MB), swap used (MB), 1-minute load average, bspool usage (%), and a `zeek_worker_count` field.
+
+The `zeek_worker_count` field is the key metric for the silent-worker-death scenario: when a Zeek worker process exits unexpectedly, the count drops from the expected 3 (br0/br1/wg0) to 2 or fewer, and the next 5-minute sample makes it observable in Axiom. Set an [Axiom monitor](https://axiom.co/docs/monitor-data/monitors) on `zeek_worker_count < 3` to alert the moment coverage degrades.
+
+The script requires no `sudo` and makes no Docker calls. Output is logged to `/home/pi/.firewalla/config/system_metrics.log` (1 MB rotation via `rotate_logs.sh`).
+
+See [dashboards/axiom-queries.md § System metrics](dashboards/axiom-queries.md#system-metrics-queries-system_metrics_exportsh) for APL queries including the br0 worker RSS trend and worker-count alert.
 
 ## Optional: dual-output to Grafana Cloud
 

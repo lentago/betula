@@ -661,3 +661,57 @@ A spike in weird entries from a device can indicate active malware or scanning a
 | summarize anomalies = count() by device, bin_auto(_time)
 | order by _time desc
 ```
+
+---
+
+## System metrics queries (system_metrics_export.sh)
+
+`system_metrics_export.sh` runs every 5 minutes and writes two event shapes into
+`${AXIOM_DATASET}`:
+
+- `metric_scope = "zeek_process"` — one event per `/usr/local/zeek/bin/zeek` process
+  with fields `role` (manager/proxy/worker), `iface` (br0/br1/wg0, empty for
+  manager/proxy), `pid`, `rss_kb`, `vsz_kb`, `cpu_pct`.
+- `metric_scope = "host"` — one box-level event with `mem_total_mb`, `mem_used_mb`,
+  `mem_available_mb`, `swap_used_mb`, `load1`, `bspool_used_pct`, `zeek_worker_count`.
+
+### br0 worker RSS over time (memory leak detector)
+
+Tracks the resident-set size of the br0 Zeek worker over time. A monotonically
+rising line toward the ~3.8 GB brofish ulimit is the leading theory behind the
+2026-07-02 silent-death incident.
+
+```kusto
+['firewalla']
+| where event_type == "system_metrics" and metric_scope == "zeek_process"
+| where iface == "br0"
+| extend rss_mb = todouble(rss_kb) / 1024.0
+| summarize rss_mb = avg(rss_mb) by bin_auto(_time)
+| order by _time asc
+```
+
+### Zeek worker count over time (dead-worker monitor)
+
+A drop below the expected worker count (typically 3 on a Gold SE: br0, br1, wg0)
+means DPI coverage is silently degraded. Set an Axiom monitor on this query with
+threshold `< 3` to alert when a worker dies.
+
+```kusto
+['firewalla']
+| where event_type == "system_metrics" and metric_scope == "host"
+| summarize workers = avg(zeek_worker_count) by bin_auto(_time)
+| order by _time asc
+```
+
+### Worker-count alert: instants where coverage dropped
+
+Point-in-time view of every 5-minute window where fewer than 3 Zeek workers
+were running. Use this to reconstruct the timeline of a blind-spot incident.
+
+```kusto
+['firewalla']
+| where event_type == "system_metrics" and metric_scope == "host"
+| where zeek_worker_count < 3
+| project _time, zeek_worker_count
+| order by _time desc
+```
