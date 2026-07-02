@@ -21,6 +21,23 @@ CONTAINER_NAME="fluent-bit-axiom"
 LOGFILE="/home/pi/.firewalla/config/fluent-bit-healthcheck.log"
 CHECK_WINDOW="5m"
 ENV_FILE="/home/pi/.firewalla/config/log_shipping.env"
+readonly LOG_MAX_BYTES=1048576
+
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [healthcheck] $1" >> "$LOGFILE"
+}
+
+rotate_log() {
+    if [[ -f "$LOGFILE" ]]; then
+        local size
+        size=$(stat -c%s "$LOGFILE")
+        if (( size >= LOG_MAX_BYTES )); then
+            mv "$LOGFILE" "${LOGFILE}.1"
+        fi
+    fi
+}
+
+rotate_log
 
 # ── Load environment variables ────────────────────────────────────────────────
 if [ -f "$ENV_FILE" ]; then
@@ -29,10 +46,6 @@ if [ -f "$ENV_FILE" ]; then
     source "$ENV_FILE"
     set +a
 fi
-
-log() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [healthcheck] $1" >> "$LOGFILE"
-}
 
 # ── Emit restart metric to Axiom (fire-and-forget) ────────────────────────────
 emit_restart_metric() {
