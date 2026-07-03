@@ -149,7 +149,7 @@ without `bootstrap.sh`). Steps:
 4. Copies `.env` as `log_shipping.env`
 5. Sets executable permissions on scripts
 6. Runs `start_log_shipping.sh` to (re)start the container
-7. Installs cron jobs from `cron/user_crontab`
+7. Merges cron jobs from `cron/user_crontab` via Firewalla's `update_crontab.sh` (never a raw `crontab` install — that wipes system jobs, #67)
 8. Runs initial device lookup export
 
 ### Common Troubleshooting
@@ -169,6 +169,7 @@ without `bootstrap.sh`). Steps:
 - **Test deploy.sh changes carefully** — it runs over SSH on a production network appliance
 - **Keep .env out of git** — it's in `.gitignore`; use `env.example` as the template
 - **Axiom free tier constraints** — 500 GB/month ingest, 30-day retention; avoid high-cardinality explosions
+- **Never install the crontab with raw `crontab user_crontab`** — that replaces pi's entire crontab and wipes Firewalla's ~60 system jobs (clean_log, zeekctl crash-recovery, watchdogs, scheduled reboot). This caused a ~15h outage cascade (#67). Always merge via `/home/pi/firewalla/scripts/update_crontab.sh`, run **as pi, never sudo** (as root it fails on a tempfile permission error and empties the crontab). If that script is missing, fail loudly — do not fall back to raw `crontab`.
 - **Cron + docker on Firewalla needs `sudo`** — the `pi` user is in the docker group via PAM at login, but cron sessions don't inherit it (this bit us in #48). Any new script invoked from `user_crontab` that touches docker must use `sudo docker`, not bare `docker`.
 - **Retry_Limit on every fluent-bit OUTPUT is `False`** — finite retries with a long peer outage silently stop the output forever (#43). On-disk buffering bounds the backlog; leave the limit unbounded.
 - **Changes to `scripts/gitops-sync.sh` itself need extra care** — a bug in the poller can either stop the loop or break future deploys. The `scripts/gitops-sync.sh|scripts/bootstrap.sh` case branch in the file classifier exists specifically so a script-only PR doesn't trigger a fluent-bit dry-run + restart. When changing the script, the safe rollout is: scp the new version to the on-device clone out-of-band, then merge the PR — that way the running poller picks up the fix immediately instead of needing one more cycle.

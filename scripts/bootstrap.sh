@@ -46,8 +46,17 @@ cp "${CLONE_PATH}/scripts/start_log_shipping.sh"       "${LIVE_DIR}/post_main.d/
 cp "${CLONE_PATH}/cron/user_crontab"                   "${LIVE_DIR}/user_crontab"
 chmod +x "${LIVE_DIR}"/*.sh "${LIVE_DIR}/post_main.d/"*.sh "${CLONE_PATH}/scripts/"*.sh
 
-echo "[bootstrap] Installing crontab (includes GitOps poller)"
-crontab "${LIVE_DIR}/user_crontab"
+echo "[bootstrap] Installing crontab via Firewalla merge script (includes GitOps poller)"
+# NEVER `crontab user_crontab` directly — that replaces pi's entire crontab and
+# wipes Firewalla's ~60 system cron jobs (clean_log, zeekctl recovery, watchdogs).
+# update_crontab.sh merges our user_crontab with the system crontabs. Run as pi,
+# never sudo (as root it fails on a tempfile permission error and empties cron).
+UPDATE_CRONTAB="/home/pi/firewalla/scripts/update_crontab.sh"
+if [[ ! -x "$UPDATE_CRONTAB" ]]; then
+  echo "[bootstrap] ERROR: ${UPDATE_CRONTAB} not found — refusing to fall back to raw crontab (would clobber system jobs)" >&2
+  exit 1
+fi
+"$UPDATE_CRONTAB"
 
 echo "[bootstrap] Starting fluent-bit container"
 sudo "${LIVE_DIR}/post_main.d/start_log_shipping.sh"
