@@ -181,13 +181,13 @@
   <text class="th" x="185" y="878" text-anchor="middle" dominant-baseline="central">Alloy (LXC 105 on Proxmox)</text>
   <text class="ts" x="185" y="896" text-anchor="middle" dominant-baseline="central">loki.source.api :3100 (push receiver)</text>
   <text class="ts" x="185" y="914" text-anchor="middle" dominant-baseline="central">loki.write → Grafana Cloud Loki</text>
-  <text class="ts" x="185" y="932" text-anchor="middle" dominant-baseline="central">See PitziLabs/homelab-observability</text>
+  <text class="ts" x="185" y="932" text-anchor="middle" dominant-baseline="central">See lentago/homelab-observability</text>
 </g>
 
 <g class="c-purple">
   <rect x="350" y="858" width="280" height="100" rx="8" stroke-width="0.5"/>
   <text class="th" x="490" y="878" text-anchor="middle" dominant-baseline="central">Grafana Cloud Loki</text>
-  <text class="ts" x="490" y="896" text-anchor="middle" dominant-baseline="central">pitzilabs.grafana.net (free tier)</text>
+  <text class="ts" x="490" y="896" text-anchor="middle" dominant-baseline="central">lentago.grafana.net (free tier)</text>
   <text class="ts" x="490" y="914" text-anchor="middle" dominant-baseline="central">log_source: zeek_dns, _conn, _ssl,</text>
   <text class="ts" x="490" y="932" text-anchor="middle" dominant-baseline="central">firewalla_acl</text>
 </g>
