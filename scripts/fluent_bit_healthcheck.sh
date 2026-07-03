@@ -75,6 +75,13 @@ fi
 # --- Get recent logs ---------------------------------------------------------
 RECENT_LOGS=$(sudo docker logs --since "$CHECK_WINDOW" "$CONTAINER_NAME" 2>&1)
 
+# Silence is healthy — a steady-state Fluent Bit logs nothing between the
+# startup banner and any errors. Exit before the counting pipelines below,
+# which cannot handle empty input under pipefail.
+if [ -z "$RECENT_LOGS" ]; then
+    exit 0
+fi
+
 # --- Check for successful activity -------------------------------------------
 # Silence is healthy: Fluent Bit logs nothing when flushes succeed quietly.
 # No-data detection (extended gap with zero events reaching Axiom) is handled
@@ -85,14 +92,19 @@ RECENT_LOGS=$(sudo docker logs --since "$CHECK_WINDOW" "$CONTAINER_NAME" 2>&1)
 #   - If we see only the startup banner → just restarted, give it time
 #   - If we see errors mixed with normal operation → recovering, leave it
 
-ERROR_COUNT=$(echo "$RECENT_LOGS" | grep -c '\[error\]' 2>/dev/null || echo 0)
-WARN_COUNT=$(echo "$RECENT_LOGS" | grep -c '\[ warn\]' 2>/dev/null || echo 0)
+# grep -c prints "0" itself on no match (exiting 1) — `|| true` satisfies
+# set -e without appending a second "0" line, which breaks the arithmetic
+# and integer comparisons below.
+ERROR_COUNT=$(echo "$RECENT_LOGS" | grep -c '\[error\]' 2>/dev/null || true)
+WARN_COUNT=$(echo "$RECENT_LOGS" | grep -c '\[ warn\]' 2>/dev/null || true)
 # shellcheck disable=SC2034  # tracked for future use
-RETRY_COUNT=$(echo "$RECENT_LOGS" | grep -c 'retry in' 2>/dev/null || echo 0)
+RETRY_COUNT=$(echo "$RECENT_LOGS" | grep -c 'retry in' 2>/dev/null || true)
 
 # If there are retries happening, Fluent Bit is actively trying but failing
 # Check if ALL recent lines are errors/warnings (no successful flushes)
-TOTAL_LINES=$(echo "$RECENT_LOGS" | grep -v '^\s*$' | wc -l)
+# `|| true`: grep -v exits 1 if every line is blank, which pipefail would
+# otherwise turn into a script-killing failure; wc still prints 0.
+TOTAL_LINES=$(echo "$RECENT_LOGS" | grep -v '^\s*$' | wc -l || true)
 ERROR_LINES=$((ERROR_COUNT + WARN_COUNT))
 
 # --- Decision logic ----------------------------------------------------------
