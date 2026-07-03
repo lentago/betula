@@ -10,7 +10,6 @@
 #   - DNS resolution failures wedging the connection pool
 #   - Axiom outage recovery (503s resolved but flushes stuck)
 #   - Stale connections after network changes
-#   - Container running but silently doing nothing
 #
 # Install location: /home/pi/.firewalla/config/fluent_bit_healthcheck.sh
 # =============================================================================
@@ -76,32 +75,36 @@ fi
 # --- Get recent logs ---------------------------------------------------------
 RECENT_LOGS=$(sudo docker logs --since "$CHECK_WINDOW" "$CONTAINER_NAME" 2>&1)
 
-# --- No output at all = suspicious -------------------------------------------
-# Fluent Bit should produce SOMETHING every flush interval (10s).
-# 5 minutes of silence means it's frozen or the container is wedged.
+# Silence is healthy — a steady-state Fluent Bit logs nothing between the
+# startup banner and any errors. Exit before the counting pipelines below,
+# which cannot handle empty input under pipefail.
 if [ -z "$RECENT_LOGS" ]; then
-    log "WARNING: No output in last ${CHECK_WINDOW} — restarting"
-    emit_restart_metric "no output in last ${CHECK_WINDOW}"
-    sudo docker restart "$CONTAINER_NAME" >> "$LOGFILE" 2>&1
-    log "Container restarted (reason: no output)"
     exit 0
 fi
 
 # --- Check for successful activity -------------------------------------------
+# Silence is healthy: Fluent Bit logs nothing when flushes succeed quietly.
+# No-data detection (extended gap with zero events reaching Axiom) is handled
+# by the external Axiom monitor, not this script.
 # Fluent Bit doesn't log successful flushes at "warn" level, but it DOES
 # stay quiet when things are working. Errors are loud. So the logic is:
 #   - If we see errors AND nothing else → stuck
 #   - If we see only the startup banner → just restarted, give it time
 #   - If we see errors mixed with normal operation → recovering, leave it
 
-ERROR_COUNT=$(echo "$RECENT_LOGS" | grep -c '\[error\]' 2>/dev/null || echo 0)
-WARN_COUNT=$(echo "$RECENT_LOGS" | grep -c '\[ warn\]' 2>/dev/null || echo 0)
+# grep -c prints "0" itself on no match (exiting 1) — `|| true` satisfies
+# set -e without appending a second "0" line, which breaks the arithmetic
+# and integer comparisons below.
+ERROR_COUNT=$(echo "$RECENT_LOGS" | grep -c '\[error\]' 2>/dev/null || true)
+WARN_COUNT=$(echo "$RECENT_LOGS" | grep -c '\[ warn\]' 2>/dev/null || true)
 # shellcheck disable=SC2034  # tracked for future use
-RETRY_COUNT=$(echo "$RECENT_LOGS" | grep -c 'retry in' 2>/dev/null || echo 0)
+RETRY_COUNT=$(echo "$RECENT_LOGS" | grep -c 'retry in' 2>/dev/null || true)
 
 # If there are retries happening, Fluent Bit is actively trying but failing
 # Check if ALL recent lines are errors/warnings (no successful flushes)
-TOTAL_LINES=$(echo "$RECENT_LOGS" | grep -v '^\s*$' | wc -l)
+# `|| true`: grep -v exits 1 if every line is blank, which pipefail would
+# otherwise turn into a script-killing failure; wc still prints 0.
+TOTAL_LINES=$(echo "$RECENT_LOGS" | grep -v '^\s*$' | wc -l || true)
 ERROR_LINES=$((ERROR_COUNT + WARN_COUNT))
 
 # --- Decision logic ----------------------------------------------------------
