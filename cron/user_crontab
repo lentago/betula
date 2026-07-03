@@ -2,7 +2,14 @@
 # Firewalla Persistent Cron Jobs
 #
 # Install location: /home/pi/.firewalla/config/user_crontab
-# Install command:  crontab /home/pi/.firewalla/config/user_crontab
+# Install command:  /home/pi/firewalla/scripts/update_crontab.sh   (run as pi)
+#
+# WARNING: NEVER install with `crontab /home/pi/.firewalla/config/user_crontab`.
+# That replaces pi's ENTIRE crontab and wipes Firewalla's ~60 system jobs
+# (clean_log, zeekctl crash-recovery, watchdogs, scheduled reboot) — see #67.
+# Firewalla's update_crontab.sh MERGES these user entries with the system
+# crontabs. Run it as pi, never sudo (as root it fails on a tempfile
+# permission error and leaves the crontab empty).
 # =============================================================================
 
 # Export device IP-to-name mappings (with groups) to Axiom every hour

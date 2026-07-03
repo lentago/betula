@@ -114,8 +114,12 @@ fi
 # --- Install cron and run initial device export ------------------------------
 echo "[5/5] Installing cron and exporting device inventory..."
 if [ "$cron_changed" = "true" ]; then
-    ssh "${FW_USER}@${FW_IP}" "crontab ${FW_CONFIG}/user_crontab"
-    echo "  crontab updated."
+    # Merge via Firewalla's script — NEVER `crontab user_crontab`, which replaces
+    # pi's whole crontab and wipes ~60 system jobs (#67). Run as pi (the SSH user),
+    # never sudo (root empties the crontab on a tempfile permission error).
+    ssh "${FW_USER}@${FW_IP}" \
+        "test -x /home/pi/firewalla/scripts/update_crontab.sh || { echo 'ERROR: update_crontab.sh not found — refusing raw crontab fallback' >&2; exit 1; }; /home/pi/firewalla/scripts/update_crontab.sh"
+    echo "  crontab merged via update_crontab.sh."
 else
     echo "  crontab unchanged — skipping reload."
 fi

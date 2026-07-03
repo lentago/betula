@@ -70,7 +70,7 @@ scp .env pi@${FW_IP}:/home/pi/.firewalla/config/log_shipping.env
 ssh pi@${FW_IP} 'curl -sSL https://raw.githubusercontent.com/lentago/firewalla-axiom-pipeline/main/scripts/bootstrap.sh | bash'
 ```
 
-`scripts/bootstrap.sh` clones this repo to `/home/pi/.firewalla/firewalla-axiom-pipeline/`, copies the config tree into `/home/pi/.firewalla/config/`, installs the crontab (which includes the 5-min GitOps poller), and starts the Fluent Bit container. One-time only — after this, the device self-syncs from `main`.
+`scripts/bootstrap.sh` clones this repo to `/home/pi/.firewalla/firewalla-axiom-pipeline/`, copies the config tree into `/home/pi/.firewalla/config/`, merges the crontab via Firewalla's `update_crontab.sh` (which includes the 5-min GitOps poller), and starts the Fluent Bit container. One-time only — after this, the device self-syncs from `main`.
 
 ### 5. Verify
 
@@ -294,7 +294,10 @@ Prevention: The `user_crontab` in this repo includes a cleanup job that runs eve
 
 ```bash
 scp cron/user_crontab pi@<firewalla-ip>:/home/pi/.firewalla/config/
-ssh pi@<firewalla-ip> "crontab /home/pi/.firewalla/config/user_crontab"
+# Merge into Firewalla's system crontabs — NEVER `crontab user_crontab`, which
+# replaces pi's whole crontab and wipes ~60 Firewalla system jobs (#67). Run as
+# pi, never sudo (root empties the crontab on a tempfile permission error).
+ssh pi@<firewalla-ip> "/home/pi/firewalla/scripts/update_crontab.sh"
 ```
 
 **Important**: Never restart Zeek via `zeekctl restart` on a Firewalla — it doesn't work reliably due to the overlay filesystem. Always use `sudo reboot` instead.
@@ -349,7 +352,7 @@ What it does, step by step:
 3. `scp`s `fluent-bit/*.conf`, `scripts/*.sh`, `cron/user_crontab`, and `.env` (as `log_shipping.env`) to the device.
 4. Sets executable bits.
 5. Runs `start_log_shipping.sh` to (re)start the Fluent Bit container.
-6. Installs the crontab and runs an initial device export.
+6. Merges the crontab via Firewalla's `update_crontab.sh` (never a raw `crontab` install, which would wipe system jobs — #67) and runs an initial device export.
 
 `deploy.sh` does **not** clone the repo or install the GitOps poller's target directory. If you used `deploy.sh` to bootstrap from scratch (no `bootstrap.sh`), follow up with:
 

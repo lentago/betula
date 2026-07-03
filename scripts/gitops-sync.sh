@@ -5,8 +5,8 @@
 # Runs every 5 min from user_crontab. Fetches origin/main, compares to HEAD,
 # and on divergence: validates the new fluent-bit config via `docker run
 # --dry-run`, swaps live files in /home/pi/.firewalla/config/, restarts the
-# container (only if its inputs changed), and reinstalls crontab (only if
-# cron/user_crontab changed). Rolls back to the pre-sync SHA on validation
+# container (only if its inputs changed), and re-merges the crontab via
+# Firewalla's update_crontab.sh (only if cron/user_crontab changed). Rolls back to the pre-sync SHA on validation
 # failure — the live container keeps running on the last-known-good config.
 #
 # Modeled on lentago/homeassistant-config scripts/gitops-sync.sh. See issue
@@ -197,8 +197,16 @@ main() {
 
   if [[ "$touched_crontab" == true ]]; then
     cp "${CLONE_PATH}/cron/user_crontab" "${LIVE_DIR}/user_crontab"
-    crontab "${LIVE_DIR}/user_crontab"
-    log INFO "Reinstalled crontab"
+    # Merge into Firewalla's system crontabs — NEVER `crontab user_crontab`, which
+    # replaces pi's entire crontab and wipes ~60 system jobs (#67). Run as pi, not
+    # sudo (root empties the crontab on a tempfile permission error).
+    local update_crontab="/home/pi/firewalla/scripts/update_crontab.sh"
+    if [[ ! -x "$update_crontab" ]]; then
+      log ERROR "${update_crontab} not found — refusing to fall back to raw crontab (would clobber system jobs)"
+      exit 1
+    fi
+    "$update_crontab"
+    log INFO "Merged crontab via update_crontab.sh"
   fi
 
   log INFO "Deploy complete at ${remote_sha:0:7}"
