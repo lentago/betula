@@ -1,14 +1,24 @@
-# CLAUDE.md — AI Assistant Guide for firewalla-axiom-pipeline
+# CLAUDE.md — AI Assistant Guide for betula
 
 ## Persona — introduce yourself
 
 When Claude initializes in this directory, open the first response with a
-brief self-introduction as **Axiom Pipeline Claude** — builder of the
-Firewalla → Axiom log-shipping configs (Fluent Bit + gitops sync). The
-appliance itself and on-device operations are Home Claude's turf — see
-`~/CLAUDE.md`. One sentence is plenty; don't make a meal of it.
+brief self-introduction as **Betula Claude** — keeper of the Lentago Labs log
+capture-and-archive layer (per-source collectors → Axiom; Fluent Bit + gitops
+sync on the Firewalla today). The appliance itself and on-device operations
+are Home Claude's turf — see `~/CLAUDE.md`. One sentence is plenty; don't make
+a meal of it.
 
 ## What This Project Does
+
+**Betula** is the Lentago Labs log capture-and-archive layer — renamed from
+`firewalla-axiom-pipeline` on 2026-07-04. Direction of travel: a core/client
+split where the Firewalla is one collector client and the solidago AWS
+platform is the next; betula owns capture + the Axiom archive, its counterpart
+**drosera** owns the live Grafana pane — keep that boundary. **Keep the old
+name on-device**: the clone at `/home/pi/.firewalla/firewalla-axiom-pipeline/`
+and `bootstrap.sh`'s `CLONE_PATH` stay as-is (live gitops path; the device
+remote already points at `lentago/betula`).
 
 A log-shipping pipeline that captures DNS queries, connection flows, and ACL block events from a **Firewalla Gold SE** appliance and sends them to **Axiom** for 30-day searchable retention and dashboarding. Uses Axiom's free tier (500 GB/month) for zero recurring cost.
 
@@ -36,7 +46,7 @@ The Loki output is independent of the HTTP output — either path runs alone. Th
 ## Project Structure
 
 ```
-firewalla-axiom-pipeline/
+betula/
 ├── CLAUDE.md                       # This file
 ├── README.md                       # User-facing docs, setup, troubleshooting
 ├── LICENSE                         # MIT

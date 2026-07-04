@@ -27,7 +27,7 @@ jobs:
     secrets: inherit
     with:
       review_prompt: |
-        This repository is a log-shipping pipeline running on a Firewalla
+        This repository is lentago/betula — the Lentago Labs log capture-and-archive layer; its first collector is a log-shipping pipeline running on a Firewalla
         Gold SE network appliance. Scripts deploy via SSH to a production
         device protecting a home network. Focus your review on:
 
