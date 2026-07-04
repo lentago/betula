@@ -378,7 +378,7 @@ This was built for a specific home network setup (Firewalla Gold SE → Axiom). 
 
 - **[lentago/homelab-observability](https://github.com/lentago/homelab-observability)** — Grafana Cloud + Alloy observability stack for the Firewalla home network
 - **[lentago/workstation-bootstrap](https://github.com/lentago/workstation-bootstrap)** — Workstation bootstrap scripts for the same homelab environment
-- **[lentago/foundry-platform-demo](https://github.com/lentago/foundry-platform-demo)** — Terraform AWS lab — same infrastructure-as-portfolio philosophy
+- **[lentago/solidago](https://github.com/lentago/solidago)** (formerly foundry-platform-demo) — Terraform AWS lab — same infrastructure-as-portfolio philosophy
 
 ## License
 
