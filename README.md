@@ -1,8 +1,22 @@
-# firewalla-axiom-pipeline
+# betula
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lentago/firewalla-axiom-pipeline)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lentago/betula)
 
-Ship DNS, connection flow, and TLS handshake logs from a Firewalla Gold SE to [Axiom](https://axiom.co) for long-term retention, search, and dashboarding — at zero recurring cost.
+**Betula** (birch — the botanical codename line alongside `lentago`, `solidago`,
+`kalmia`, `drosera`, and `claytonia`) is the Lentago Labs **log
+capture-and-archive layer**: per-source collectors shipping full-volume logs to
+[Axiom](https://axiom.co) for long-retention search at zero recurring cost.
+Birch bark was the ancient world's durable writing surface — betula is where
+the logs keep. Its counterpart **drosera** is the live telemetry pane (Grafana
+Cloud); betula never grows dashboards, drosera never grows an archive.
+
+The current collector — this repo's implementation today — ships DNS,
+connection flow, and TLS handshake logs from a **Firewalla Gold SE**. The
+roadmap is a core/client split so the Firewalla becomes one client among
+several, with AWS (the solidago platform) the intended next source. Renamed
+from `firewalla-axiom-pipeline` on 2026-07-04; the on-device clone path
+`/home/pi/.firewalla/firewalla-axiom-pipeline/` deliberately keeps the old
+name.
 
 **Authorship:** The Fluent Bit configs, bash scripts, APL queries, and documentation in this repo are co-written with [Claude](https://claude.ai) (Anthropic). I direct the work and review the output; Claude writes the code. I'm an infrastructure operator, not a software engineer — please don't read this repo as a portfolio of coding ability.
 
@@ -48,8 +62,8 @@ The same Fluent Bit instance optionally fans out to a LAN Loki receiver (see [§
 ### 2. Clone this repo and configure
 
 ```bash
-git clone https://github.com/lentago/firewalla-axiom-pipeline.git
-cd firewalla-axiom-pipeline
+git clone https://github.com/lentago/betula.git
+cd betula
 
 # Create your local env file (not committed to git)
 cp env.example .env
@@ -69,7 +83,7 @@ scp .env pi@${FW_IP}:/home/pi/.firewalla/config/log_shipping.env
 ### 4. Bootstrap
 
 ```bash
-ssh pi@${FW_IP} 'curl -sSL https://raw.githubusercontent.com/lentago/firewalla-axiom-pipeline/main/scripts/bootstrap.sh | bash'
+ssh pi@${FW_IP} 'curl -sSL https://raw.githubusercontent.com/lentago/betula/main/scripts/bootstrap.sh | bash'
 ```
 
 `scripts/bootstrap.sh` clones this repo to `/home/pi/.firewalla/firewalla-axiom-pipeline/`, copies the config tree into `/home/pi/.firewalla/config/`, merges the crontab via Firewalla's `update_crontab.sh` (which includes the 5-min GitOps poller), and starts the Fluent Bit container. One-time only — after this, the device self-syncs from `main`.
@@ -115,7 +129,7 @@ Typical deploy wall-clock for a config change: **~2 seconds** (dry-run + file co
 ## File layout
 
 ```
-firewalla-axiom-pipeline/
+betula/
 ├── README.md
 ├── LICENSE
 ├── env.example                          # Template for credentials
@@ -170,7 +184,7 @@ The shipped `fluent-bit.conf` has **two outputs** active:
 | `[OUTPUT] http` (line ~111) | Axiom HTTPS API | Long-retention search, dashboards, primary durable copy |
 | `[OUTPUT] loki` (line ~140) | Grafana Cloud Loki (direct push, TLS 443) | Live dashboards / alerting via Grafana Cloud; credentials from `GRAFANA_CLOUD_LOGS_*` env vars |
 
-The two outputs are independent — each retries on its own, and an outage on one side does not affect the other. `Retry_Limit False` on both means a peer outage self-heals without operator intervention once connectivity returns (the fix from [#43](https://github.com/lentago/firewalla-axiom-pipeline/issues/43)).
+The two outputs are independent — each retries on its own, and an outage on one side does not affect the other. `Retry_Limit False` on both means a peer outage self-heals without operator intervention once connectivity returns (the fix from [#43](https://github.com/lentago/betula/issues/43)).
 
 If you don't use Grafana Cloud Loki, either:
 - Replace the `GRAFANA_CLOUD_LOGS_*` values with your own Loki/Promtail/Vector endpoint credentials, or
@@ -359,7 +373,7 @@ What it does, step by step:
 `deploy.sh` does **not** clone the repo or install the GitOps poller's target directory. If you used `deploy.sh` to bootstrap from scratch (no `bootstrap.sh`), follow up with:
 
 ```bash
-ssh pi@<fw-ip> 'git clone https://github.com/lentago/firewalla-axiom-pipeline.git /home/pi/.firewalla/firewalla-axiom-pipeline'
+ssh pi@<fw-ip> 'git clone https://github.com/lentago/betula.git /home/pi/.firewalla/firewalla-axiom-pipeline'
 ```
 
 After that, the cron poller (already in `user_crontab`) will start syncing every 5 min.
