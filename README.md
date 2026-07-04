@@ -192,7 +192,7 @@ If you don't use Grafana Cloud Loki, either:
 
 ### Loki output contract
 
-The `[OUTPUT] loki` block attaches a fixed set of stream labels to every log line. The [lentago/homelab-observability](https://github.com/lentago/homelab-observability) dashboards and alert rules query these labels by name — **changing any of them silently breaks the consumer** (mismatches produce empty panels, not errors).
+The `[OUTPUT] loki` block attaches a fixed set of stream labels to every log line. The [lentago/drosera](https://github.com/lentago/drosera) dashboards and alert rules query these labels by name — **changing any of them silently breaks the consumer** (mismatches produce empty panels, not errors).
 
 **Stream labels on every event:**
 
@@ -390,9 +390,9 @@ This was built for a specific home network setup (Firewalla Gold SE → Axiom). 
 
 ## Related
 
-- **[lentago/homelab-observability](https://github.com/lentago/homelab-observability)** — Grafana Cloud + Alloy observability stack for the Firewalla home network
-- **[lentago/workstation-bootstrap](https://github.com/lentago/workstation-bootstrap)** — Workstation bootstrap scripts for the same homelab environment
-- **[lentago/solidago](https://github.com/lentago/solidago)** (formerly foundry-platform-demo) — Terraform AWS lab — same infrastructure-as-portfolio philosophy
+- **[lentago/drosera](https://github.com/lentago/drosera)** — Grafana Cloud + Alloy observability stack for the Firewalla home network
+- **[lentago/kalmia](https://github.com/lentago/kalmia)** — Workstation provisioning for the same homelab environment
+- **[lentago/solidago](https://github.com/lentago/solidago)** — Terraform AWS lab — same infrastructure-as-portfolio philosophy
 
 ## License
 
