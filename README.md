@@ -1,5 +1,7 @@
 # firewalla-axiom-pipeline
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lentago/firewalla-axiom-pipeline)
+
 Ship DNS, connection flow, and TLS handshake logs from a Firewalla Gold SE to [Axiom](https://axiom.co) for long-term retention, search, and dashboarding — at zero recurring cost.
 
 **Authorship:** The Fluent Bit configs, bash scripts, APL queries, and documentation in this repo are co-written with [Claude](https://claude.ai) (Anthropic). I direct the work and review the output; Claude writes the code. I'm an infrastructure operator, not a software engineer — please don't read this repo as a portfolio of coding ability.
