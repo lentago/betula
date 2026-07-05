@@ -181,7 +181,7 @@
   <text class="th" x="185" y="878" text-anchor="middle" dominant-baseline="central">Alloy (LXC 105 on Proxmox)</text>
   <text class="ts" x="185" y="896" text-anchor="middle" dominant-baseline="central">loki.source.api :3100 (push receiver)</text>
   <text class="ts" x="185" y="914" text-anchor="middle" dominant-baseline="central">loki.write → Grafana Cloud Loki</text>
-  <text class="ts" x="185" y="932" text-anchor="middle" dominant-baseline="central">See lentago/homelab-observability</text>
+  <text class="ts" x="185" y="932" text-anchor="middle" dominant-baseline="central">See lentago/drosera</text>
 </g>
 
 <g class="c-purple">
