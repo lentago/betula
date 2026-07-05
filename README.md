@@ -199,7 +199,7 @@ The `[OUTPUT] loki` block attaches a fixed set of stream labels to every log lin
 | Label | Value(s) | How it's set |
 |-------|----------|--------------|
 | `job` | `firewalla` | Static — `Labels job=firewalla` directive |
-| `cluster` | `homelab` | Static — `Labels cluster=homelab` directive |
+| `cluster` | `lentago-lab` | Static — `Labels cluster=lentago-lab` directive |
 | `log_source` | `zeek_dns` · `zeek_conn` · `zeek_ssl` · `firewalla_acl` | Promoted from the record field via `Label_keys $log_source`; value is set per-stream by the `[FILTER] modify` blocks above |
 
 **Wire format:** Fluent Bit `loki` output plugin, body gzip-compressed, delivered over HTTPS (port 443, TLS verify on). Auth is HTTP Basic Auth (`GRAFANA_CLOUD_LOGS_USER` / `GRAFANA_CLOUD_LOGS_TOKEN`).
@@ -209,7 +209,7 @@ The `[OUTPUT] loki` block attaches a fixed set of stream labels to every log lin
 **Adapting for a different Loki destination:**
 - Self-hosted Loki / Promtail / Vector: change `Host` and `Port`, remove `TLS on`/`TLS.Verify on`, remove `HTTP_User`/`HTTP_Passwd`.
 - Disable Loki entirely (Axiom only): comment out the `[OUTPUT] loki` block.
-- Adding or renaming a `log_source` value: update the homelab-observability Grafana queries to match — schema is enforced nowhere.
+- Adding or renaming a `log_source` value: update the drosera Grafana queries to match — schema is enforced nowhere.
 
 ## Firewalla internals
 
@@ -391,7 +391,7 @@ This was built for a specific home network setup (Firewalla Gold SE → Axiom). 
 ## Related
 
 - **[lentago/drosera](https://github.com/lentago/drosera)** — Grafana Cloud + Alloy observability stack for the Firewalla home network
-- **[lentago/kalmia](https://github.com/lentago/kalmia)** — Workstation provisioning for the same homelab environment
+- **[lentago/kalmia](https://github.com/lentago/kalmia)** — Workstation provisioning for the same Lentago lab environment
 - **[lentago/solidago](https://github.com/lentago/solidago)** — Terraform AWS lab — same infrastructure-as-portfolio philosophy
 
 ## License
