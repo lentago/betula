@@ -13,7 +13,7 @@ directory holds the contract.
 |---|---|---|
 | Dataset | `cjp-solidago-ecs` | betula (this file names it; created in Axiom) |
 | Ingest token | Axiom token scoped to that dataset, ingest-only | betula |
-| Token delivery | AWS Secrets Manager `foundry-dev-axiom-ingest-header`, value `Authorization Bearer <token>` (Fluent Bit header syntax — no colon) | solidago |
+| Token delivery | AWS Secrets Manager `solidago-dev-axiom-ingest-header`, value `Authorization Bearer <token>` (Fluent Bit header syntax — no colon) | solidago |
 | Emitter | FireLens sidecars in `modules/ecs` + `modules/site` (HTTP output: json_lines, gzip, TLS, `enable-ecs-log-metadata`) | solidago |
 | Event metadata | `ecs_cluster`, `ecs_task_arn`, `ecs_task_definition`, `container_name` stamped per event | FireLens |
 
