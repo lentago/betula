@@ -52,15 +52,14 @@ dryrun_fluent_bit() {
   trap "rm -rf '$tmp'" RETURN
   cp "$src_dir/fluent-bit.conf" "$tmp/fluent-bit.conf"
   cp "$src_dir/parsers.conf"    "$tmp/parsers.conf"
-  # Env vars in the config (${AXIOM_DATASET}, ${AXIOM_API_TOKEN}) must be set
-  # for the dry-run to parse — values don't matter, no network is touched.
+  # The ${GRAFANA_CLOUD_LOGS_*} env vars referenced by the config are left unset
+  # for the dry-run — fluent-bit substitutes empty strings and still parses the
+  # config; no network is touched.
   # sudo: cron's pi user lacks docker-socket access without it. The redirect
   # writes to a pi-owned tmp file so it doesn't need sudo (SC2024 false positive).
   # shellcheck disable=SC2024
   sudo docker run --rm \
     -v "$tmp:/fluent-bit/etc:ro" \
-    -e AXIOM_DATASET=dryrun \
-    -e AXIOM_API_TOKEN=dryrun \
     "$IMAGE" \
     /fluent-bit/bin/fluent-bit -c /fluent-bit/etc/fluent-bit.conf --dry-run \
     > "$err_out" 2>&1
@@ -182,13 +181,10 @@ main() {
   fi
 
   if [[ "$touched_scripts" == true ]]; then
-    # device_lookup_export.sh and fluent_bit_healthcheck.sh live directly in
-    # config/. start_log_shipping.sh lives in config/post_main.d/.
+    # fluent_bit_healthcheck.sh and rotate_logs.sh live directly in config/.
+    # start_log_shipping.sh lives in config/post_main.d/.
     mkdir -p "${LIVE_DIR}/post_main.d"
-    [[ -f "${CLONE_PATH}/scripts/device_lookup_export.sh"    ]] && cp "${CLONE_PATH}/scripts/device_lookup_export.sh"    "${LIVE_DIR}/device_lookup_export.sh"
-    [[ -f "${CLONE_PATH}/scripts/device_group_upload.sh"    ]] && cp "${CLONE_PATH}/scripts/device_group_upload.sh"     "${LIVE_DIR}/device_group_upload.sh"
     [[ -f "${CLONE_PATH}/scripts/fluent_bit_healthcheck.sh" ]] && cp "${CLONE_PATH}/scripts/fluent_bit_healthcheck.sh"  "${LIVE_DIR}/fluent_bit_healthcheck.sh"
-    [[ -f "${CLONE_PATH}/scripts/system_metrics_export.sh"  ]] && cp "${CLONE_PATH}/scripts/system_metrics_export.sh"   "${LIVE_DIR}/system_metrics_export.sh"
     [[ -f "${CLONE_PATH}/scripts/rotate_logs.sh"            ]] && cp "${CLONE_PATH}/scripts/rotate_logs.sh"             "${LIVE_DIR}/rotate_logs.sh"
     [[ -f "${CLONE_PATH}/scripts/start_log_shipping.sh"     ]] && cp "${CLONE_PATH}/scripts/start_log_shipping.sh"      "${LIVE_DIR}/post_main.d/start_log_shipping.sh"
     chmod +x "${LIVE_DIR}"/*.sh "${LIVE_DIR}/post_main.d/"*.sh 2>/dev/null || true

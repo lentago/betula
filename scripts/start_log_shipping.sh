@@ -23,21 +23,16 @@ if [ -f "$ENV_FILE" ]; then
     set +a
 else
     echo "[log-shipping] WARNING: $ENV_FILE not found. Create it with:"
-    echo "  AXIOM_DATASET=firewalla"
-    echo "  AXIOM_API_TOKEN=xaat-your-token-here"
+    echo "  GRAFANA_CLOUD_LOGS_HOST=logs-prod-XXX.grafana.net"
+    echo "  GRAFANA_CLOUD_LOGS_USER=000000"
+    echo "  GRAFANA_CLOUD_LOGS_TOKEN=glc-your-token-here"
     exit 1
 fi
 
 # --- Validate required env vars ----------------------------------------------
-if [ -z "${AXIOM_DATASET:-}" ] || [ -z "${AXIOM_API_TOKEN:-}" ]; then
-    echo "[log-shipping] ERROR: AXIOM_DATASET and AXIOM_API_TOKEN must be set in $ENV_FILE"
-    exit 1
-fi
-
-# Grafana Cloud Loki creds are optional — if unset, the direct Loki output just
-# fails at runtime and retries (Axiom is unaffected). Warn so it isn't silent.
 if [ -z "${GRAFANA_CLOUD_LOGS_HOST:-}" ] || [ -z "${GRAFANA_CLOUD_LOGS_USER:-}" ] || [ -z "${GRAFANA_CLOUD_LOGS_TOKEN:-}" ]; then
-    echo "[log-shipping] WARNING: GRAFANA_CLOUD_LOGS_{HOST,USER,TOKEN} not all set — the direct Loki output will be inactive (Axiom unaffected)."
+    echo "[log-shipping] ERROR: GRAFANA_CLOUD_LOGS_{HOST,USER,TOKEN} must all be set in $ENV_FILE"
+    exit 1
 fi
 
 # --- Wait for Docker ---------------------------------------------------------
@@ -79,16 +74,14 @@ if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
 fi
 
 # --- Start Fluent Bit --------------------------------------------------------
-echo "[log-shipping] Starting Fluent Bit → Axiom pipeline..."
+echo "[log-shipping] Starting Fluent Bit → Grafana Cloud Loki pipeline..."
 docker run -d \
     --name "$CONTAINER_NAME" \
     --restart always \
     --network host \
-    -e AXIOM_DATASET="${AXIOM_DATASET}" \
-    -e AXIOM_API_TOKEN="${AXIOM_API_TOKEN}" \
-    -e GRAFANA_CLOUD_LOGS_HOST="${GRAFANA_CLOUD_LOGS_HOST:-}" \
-    -e GRAFANA_CLOUD_LOGS_USER="${GRAFANA_CLOUD_LOGS_USER:-}" \
-    -e GRAFANA_CLOUD_LOGS_TOKEN="${GRAFANA_CLOUD_LOGS_TOKEN:-}" \
+    -e GRAFANA_CLOUD_LOGS_HOST="${GRAFANA_CLOUD_LOGS_HOST}" \
+    -e GRAFANA_CLOUD_LOGS_USER="${GRAFANA_CLOUD_LOGS_USER}" \
+    -e GRAFANA_CLOUD_LOGS_TOKEN="${GRAFANA_CLOUD_LOGS_TOKEN}" \
     -v "${CONFIG_DIR}/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro" \
     -v "${CONFIG_DIR}/parsers.conf:/fluent-bit/etc/parsers.conf:ro" \
     -v "${CONFIG_DIR}/fluent-bit-data:/fluent-bit/data" \
@@ -96,5 +89,5 @@ docker run -d \
     -v "/alog:/logs/alog:ro" \
     "$IMAGE"
 
-echo "[log-shipping] Fluent Bit running. Dataset: ${AXIOM_DATASET}"
+echo "[log-shipping] Fluent Bit running → Grafana Cloud Loki (${GRAFANA_CLOUD_LOGS_HOST})"
 echo "[log-shipping] Check status: docker logs ${CONTAINER_NAME}"

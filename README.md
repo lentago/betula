@@ -3,61 +3,62 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lentago/betula)
 
 **Betula** (birch — the botanical codename line alongside `lentago`, `solidago`,
-`kalmia`, `drosera`, and `claytonia`) is the Lentago Labs **log
-capture-and-archive layer**: per-source collectors shipping full-volume logs to
-[Axiom](https://axiom.co) for long-retention search at zero recurring cost.
-Birch bark was the ancient world's durable writing surface — betula is where
-the logs keep. Its counterpart **drosera** is the live telemetry pane (Grafana
-Cloud); betula never grows dashboards, drosera never grows an archive.
+`kalmia`, `drosera`, and `claytonia`) is the Lentago Labs **log capture layer**:
+per-source collectors shipping full-volume logs off the device for search,
+dashboards, and alerting. Birch bark was the ancient world's durable writing
+surface — betula is where the logs keep.
 
 The current collector — this repo's implementation today — ships DNS,
-connection flow, and TLS handshake logs from a **Firewalla Gold SE**. The
-roadmap is a core/client split so the Firewalla becomes one client among
-several, with AWS (the solidago platform) the intended next source. Renamed
-from `firewalla-axiom-pipeline` on 2026-07-04; the on-device clone path
-`/home/pi/.firewalla/firewalla-axiom-pipeline/` deliberately keeps the old
-name.
+connection flow, and TLS handshake logs from a **Firewalla Gold SE** to
+**Grafana Cloud Loki**. The roadmap is a core/client split so the Firewalla
+becomes one client among several, with AWS (the solidago platform) the intended
+next source. Renamed from `firewalla-axiom-pipeline` on 2026-07-04; the
+on-device clone path `/home/pi/.firewalla/firewalla-axiom-pipeline/`
+deliberately keeps the old name.
 
-**Authorship:** The Fluent Bit configs, bash scripts, APL queries, and documentation in this repo are co-written with [Claude](https://claude.ai) (Anthropic). I direct the work and review the output; Claude writes the code. I'm an infrastructure operator, not a software engineer — please don't read this repo as a portfolio of coding ability.
+> **Destination change (2026-07-09):** betula no longer ships to Axiom. The
+> Axiom HTTP output, the device-inventory export, and the host/Zeek
+> system-metrics export were removed to reclaim the `firewalla` and
+> `firewalla-devices` Axiom datasets. The Firewalla now ships **only** to
+> Grafana Cloud Loki (the live pane owned by [lentago/drosera](https://github.com/lentago/drosera)).
+> The git history before this date documents the Axiom archive path if it needs
+> to be revived as a client later.
+
+**Authorship:** The Fluent Bit configs, bash scripts, and documentation in this repo are co-written with [Claude](https://claude.ai) (Anthropic). I direct the work and review the output; Claude writes the code. I'm an infrastructure operator, not a software engineer — please don't read this repo as a portfolio of coding ability.
 
 ## What this does
 
-Your Firewalla app shows you what domains each device visits, but the data rotates off the device quickly. This pipeline captures that same data (Zeek DNS, connection, and SSL logs) and ships it to Axiom's cloud, giving you:
+Your Firewalla app shows you what domains each device visits, but the data rotates off the device quickly. This pipeline captures that same data (Zeek DNS, connection, and SSL logs) and ships it to Grafana Cloud Loki, giving you:
 
-- **30-day searchable history** of every DNS query, flow, and TLS handshake on your network
-- **Per-device drill-down** dashboards (select a device, see its domains and TLS SNIs)
+- **Searchable history** of every DNS query, flow, and TLS handshake on your network, queryable in Grafana
 - **HTTPS visibility** via SSL/TLS handshake metadata (SNI, cert chain fingerprints) — what was actually connected to, not just looked up
-- **Device name resolution** via automated Redis inventory export
+- **Live dashboards and alerting** via the [lentago/drosera](https://github.com/lentago/drosera) Grafana Cloud stack
 - **Firmware-update resilience** using Firewalla's `post_main.d` persistence
 - **Self-healing config changes** via a 5-minute GitOps poller — merge a PR to `main`, the Firewalla picks it up
 - **~50 MB RAM overhead** on the Firewalla
 
-Total cost: **$0/month** (Axiom free tier: 500 GB/month, 30-day retention)
-
-The same Fluent Bit instance optionally fans out to a LAN Loki receiver (see [§Optional: dual-output to Grafana Cloud](#optional-dual-output-to-grafana-cloud)) — Axiom is the primary, long-retention destination; Loki is the live dashboard pane.
+The Firewalla pushes **directly** to Grafana Cloud Loki over HTTPS — no LAN relay, mirroring the per-host Alloy push model in drosera (no central chokepoint).
 
 ## Architecture
 
 ![Pipeline Architecture](docs/architecture.svg)
 
+_The diagram still depicts the retired Axiom archive path; it will be refreshed in a follow-up._
 
 ## Prerequisites
 
 - **Firewalla Gold SE** (Gold Pro or Purple SE should also work — untested)
 - **SSH access** enabled (Firewalla app → Settings → Advanced → SSH)
 - **Docker** started on the Firewalla (`sudo systemctl start docker && sudo systemctl enable docker`)
-- **Axiom account** (free at [app.axiom.co](https://app.axiom.co))
+- **Grafana Cloud account** with a Loki instance (free tier at [grafana.com](https://grafana.com))
 
 ## Quick start
 
-### 1. Create Axiom datasets and API token
+### 1. Create a Grafana Cloud Loki access token
 
-1. Sign up at [app.axiom.co](https://app.axiom.co)
-2. Create two datasets:
-   - `firewalla` (or your preferred name — for log events)
-   - `firewalla-devices` (for the device lookup table)
-3. Go to **Settings → API Tokens → New API Token**
-4. Name it `firewalla-ingest`, grant **Ingest** permission, copy the token
+1. Sign up / sign in at [grafana.com](https://grafana.com) and open your stack.
+2. Note your Loki **push host** (e.g. `logs-prod-042.grafana.net`) and your Loki **instance/user ID** (numeric) — both on the stack's Loki "Details" page.
+3. Create an **access policy** with the `logs:write` scope, then a token under it (starts with `glc_`).
 
 ### 2. Clone this repo and configure
 
@@ -68,12 +69,12 @@ cd betula
 # Create your local env file (not committed to git)
 cp env.example .env
 nano .env
-# Fill in your Axiom dataset names and API token
+# Fill in your GRAFANA_CLOUD_LOGS_{HOST,USER,TOKEN}
 ```
 
 ### 3. Place the secrets on the Firewalla
 
-`.env` (your Axiom credentials) is the only thing that has to land on the device by hand — git never sees it. Future config changes flow through GitOps, no SSH required.
+`.env` (your Grafana Cloud Loki credentials) is the only thing that has to land on the device by hand — git never sees it. Future config changes flow through GitOps, no SSH required.
 
 ```bash
 export FW_IP=192.168.1.1   # your Firewalla's LAN address
@@ -98,7 +99,7 @@ ssh pi@${FW_IP} 'sudo docker logs --tail 20 fluent-bit-axiom'
 ssh pi@${FW_IP} 'tail -20 /home/pi/.firewalla/config/gitops-sync.log 2>/dev/null || echo "(log empty — clean no-ops)"'
 ```
 
-Then open Axiom **Stream** view on the `firewalla` dataset; you should see DNS, connection, and SSL events within a minute or two.
+Then open Grafana **Explore** on your Loki datasource and run `{job="firewalla"}`; you should see DNS, connection, and SSL events within a minute or two.
 
 ## GitOps auto-deploy
 
@@ -118,11 +119,11 @@ Once bootstrapped, the Firewalla keeps itself in sync with `origin/main`. The no
 6. On validation fail: `git reset --hard <rollback-sha>` and log the dry-run
    output. The live container keeps running on the last-known-good config.
 
-Typical deploy wall-clock for a config change: **~2 seconds** (dry-run + file copy + container restart). The Loki output sees a sub-3-second backlog flush; Axiom output is uninterrupted.
+Typical deploy wall-clock for a config change: **~2 seconds** (dry-run + file copy + container restart). The Loki output sees a sub-3-second backlog flush.
 
 **Log:** `/home/pi/.firewalla/config/gitops-sync.log` — timestamped, leveled, rotates at 1 MB to `.log.1`. No-ops are suppressed; expect quiet days. The log is the first place to look when a merge didn't seem to take.
 
-**Secrets stay device-local.** `log_shipping.env` is never touched by sync. If you rotate the Axiom token, scp the new env file manually (see [§Manual / break-glass deploy](#manual--break-glass-deploy)).
+**Secrets stay device-local.** `log_shipping.env` is never touched by sync. If you rotate the Grafana Cloud token, scp the new env file manually (see [§Manual / break-glass deploy](#manual--break-glass-deploy)).
 
 **Break-glass.** `deploy.sh <fw-ip>` from a workstation still works for the rare case where you need to push from a non-`main` branch (e.g., debugging a poller bug that's blocking the loop). See the appendix.
 
@@ -138,57 +139,20 @@ betula/
 │   └── parsers.conf                     # Zeek log parser definitions
 ├── scripts/
 │   ├── start_log_shipping.sh            # Docker bootstrap (post_main.d)
-│   ├── device_lookup_export.sh          # Redis → Axiom device inventory
-│   ├── device_group_upload.sh           # Group metadata helper
-│   ├── system_metrics_export.sh         # Host + Zeek process metrics → Axiom (cron)
 │   ├── fluent_bit_healthcheck.sh        # Wedged-container restarter (cron)
+│   ├── rotate_logs.sh                   # Daily pipeline-log rotation (cron)
 │   ├── gitops-sync.sh                   # 5-min poll → fetch → validate → reload
 │   └── bootstrap.sh                     # One-time on-device setup
 ├── cron/
 │   └── user_crontab                     # Persistent cron jobs
-├── dashboards/
-│   └── axiom-queries.md                 # Saved APL queries for Axiom
 ├── docs/
 │   └── zeek-field-reference.md          # Complete Zeek JSON field reference
 └── deploy.sh                            # One-command deploy script
 ```
 
-## Axiom dashboard setup
+## Output: Grafana Cloud Loki
 
-See [dashboards/axiom-queries.md](dashboards/axiom-queries.md) for the complete set of APL queries, including:
-
-- Top domains across all devices
-- Per-device domain breakdown (with device name resolution)
-- DNS activity over time
-- Dashboard filter bar configuration for device drill-down
-
-## System metrics export
-
-`scripts/system_metrics_export.sh` runs every 5 minutes from `cron/user_crontab` and posts a small batch of metrics events to `${AXIOM_DATASET}` alongside the Zeek log events. Each batch contains:
-
-- **One event per Zeek process** (`metric_scope: "zeek_process"`) — role (manager/proxy/worker), interface (`br0`/`br1`/`wg0`), PID, RSS (KB), VSZ (KB), and CPU%.
-- **One box-level snapshot** (`metric_scope: "host"`) — total/used/available memory (MB), swap used (MB), 1-minute load average, bspool usage (%), and a `zeek_worker_count` field.
-
-The `zeek_worker_count` field is the key metric for the silent-worker-death scenario: when a Zeek worker process exits unexpectedly, the count drops from the expected 3 (br0/br1/wg0) to 2 or fewer, and the next 5-minute sample makes it observable in Axiom. Set an [Axiom monitor](https://axiom.co/docs/monitor-data/monitors) on `zeek_worker_count < 3` to alert the moment coverage degrades.
-
-The script requires no `sudo` and makes no Docker calls. Output is logged to `/home/pi/.firewalla/config/system_metrics.log` (1 MB rotation via `rotate_logs.sh`).
-
-See [dashboards/axiom-queries.md § System metrics](dashboards/axiom-queries.md#system-metrics-queries-system_metrics_exportsh) for APL queries including the br0 worker RSS trend and worker-count alert.
-
-## Optional: dual-output to Grafana Cloud
-
-The shipped `fluent-bit.conf` has **two outputs** active:
-
-| Output | Destination | Purpose |
-|---|---|---|
-| `[OUTPUT] http` (line ~111) | Axiom HTTPS API | Long-retention search, dashboards, primary durable copy |
-| `[OUTPUT] loki` (line ~140) | Grafana Cloud Loki (direct push, TLS 443) | Live dashboards / alerting via Grafana Cloud; credentials from `GRAFANA_CLOUD_LOGS_*` env vars |
-
-The two outputs are independent — each retries on its own, and an outage on one side does not affect the other. `Retry_Limit False` on both means a peer outage self-heals without operator intervention once connectivity returns (the fix from [#43](https://github.com/lentago/betula/issues/43)).
-
-If you don't use Grafana Cloud Loki, either:
-- Replace the `GRAFANA_CLOUD_LOGS_*` values with your own Loki/Promtail/Vector endpoint credentials, or
-- Comment out the `[OUTPUT] loki` block entirely.
+The shipped `fluent-bit.conf` has a single active output: a **direct push to Grafana Cloud Loki** over HTTPS (TLS 443). `Retry_Limit False` means a peer outage self-heals without operator intervention once connectivity returns (the fix from [#43](https://github.com/lentago/betula/issues/43)); on-disk buffering bounds the backlog during an outage.
 
 ### Loki output contract
 
@@ -208,7 +172,6 @@ The `[OUTPUT] loki` block attaches a fixed set of stream labels to every log lin
 
 **Adapting for a different Loki destination:**
 - Self-hosted Loki / Promtail / Vector: change `Host` and `Port`, remove `TLS on`/`TLS.Verify on`, remove `HTTP_User`/`HTTP_Passwd`.
-- Disable Loki entirely (Axiom only): comment out the `[OUTPUT] loki` block.
 - Adding or renaming a `log_source` value: update the drosera Grafana queries to match — schema is enforced nowhere.
 
 ## Firewalla internals
@@ -221,7 +184,6 @@ This pipeline relies on the following Firewalla data sources:
 | Zeek conn log | `/bspool/manager/conn.log` | Every connection: source, dest, port, bytes, duration |
 | Zeek SSL log | `/bspool/manager/ssl.log` | Every TLS handshake: SNI, version, cipher, JA3-style ssl_history, cert chain fingerprints |
 | ACL audit log | `/alog/acl-audit.log` | Blocked connections from Firewalla iptables rules (kernel `FW_ADT` lines, syslog-format) |
-| Redis device inventory | `redis-cli hgetall host:mac:*` | IP, MAC, device name, DHCP name, interface |
 
 ### Persistence across firmware updates
 
@@ -237,7 +199,7 @@ On recent firmware, Zeek logs are written as **JSON** (not TSV). Key fields in `
 - `qtype_name` — query type (A, AAAA, CNAME, etc.)
 - `answers` — DNS response
 
-Note: field names contain dots (e.g., `id.orig_h`), which requires bracket notation in APL: `parsed["id.orig_h"]`.
+Note: field names contain dots (e.g., `id.orig_h`), which requires care when querying downstream.
 
 For the complete field reference covering all `dns.log` and `conn.log` fields, gotchas, and example raw events, see **[docs/zeek-field-reference.md](docs/zeek-field-reference.md)**.
 
@@ -283,7 +245,7 @@ sudo docker restart fluent-bit-axiom
 ```
 
 Common causes:
-- **HTTP 503 errors**: Axiom outage — restart the container once Axiom is back
+- **HTTP 4xx/5xx errors to Loki**: check the `GRAFANA_CLOUD_LOGS_*` creds in `log_shipping.env` (401/403 = bad token/user; 5xx = Grafana Cloud outage — the output retries automatically once it's back)
 - **Container missing**: Firmware update wiped Docker — run `start_log_shipping.sh`
 - **No log files**: Check `ls -la /bspool/manager/dns.log` exists
 - **/bspool full**: See below — this is the most common issue on busy networks
@@ -357,7 +319,7 @@ tail -5 /bspool/manager/dns.log
 GitOps assumes the Firewalla can reach GitHub and that the poller itself isn't broken. When either of those assumptions fails (or you're bootstrapping the box for the first time without `curl | bash`), `deploy.sh` from the workstation does the full sync:
 
 ```bash
-cp env.example .env   # fill in your Axiom dataset + token
+cp env.example .env   # fill in your Grafana Cloud Loki credentials
 ./deploy.sh <firewalla-ip>
 ```
 
@@ -368,7 +330,7 @@ What it does, step by step:
 3. `scp`s `fluent-bit/*.conf`, `scripts/*.sh`, `cron/user_crontab`, and `.env` (as `log_shipping.env`) to the device.
 4. Sets executable bits.
 5. Runs `start_log_shipping.sh` to (re)start the Fluent Bit container.
-6. Merges the crontab via Firewalla's `update_crontab.sh` (never a raw `crontab` install, which would wipe system jobs — #67) and runs an initial device export.
+6. Merges the crontab via Firewalla's `update_crontab.sh` (never a raw `crontab` install, which would wipe system jobs — #67).
 
 `deploy.sh` does **not** clone the repo or install the GitOps poller's target directory. If you used `deploy.sh` to bootstrap from scratch (no `bootstrap.sh`), follow up with:
 
@@ -380,17 +342,16 @@ After that, the cron poller (already in `user_crontab`) will start syncing every
 
 ## Contributing
 
-This was built for a specific home network setup (Firewalla Gold SE → Axiom). PRs welcome for:
+This was built for a specific home network setup (Firewalla Gold SE → Grafana Cloud Loki). PRs welcome for:
 
 - Support for other Firewalla models (Purple SE, Gold Pro)
-- Additional log sources (ssl.log, http.log, files.log)
-- Grafana Cloud as an alternative destination
+- Additional log sources (http.log, files.log)
+- Alternative log destinations
 - IPv6 device name resolution
-- Terraform/IaC for Axiom dataset and dashboard provisioning
 
 ## Related
 
-- **[lentago/drosera](https://github.com/lentago/drosera)** — Grafana Cloud + Alloy observability stack for the Firewalla home network
+- **[lentago/drosera](https://github.com/lentago/drosera)** — Grafana Cloud + Alloy observability stack for the Firewalla home network (the Loki consumer)
 - **[lentago/kalmia](https://github.com/lentago/kalmia)** — Workstation provisioning for the same Lentago lab environment
 - **[lentago/solidago](https://github.com/lentago/solidago)** — Terraform AWS lab — same infrastructure-as-portfolio philosophy
 
@@ -400,7 +361,7 @@ MIT License — see [LICENSE](LICENSE).
 
 ## Credits
 
-See the Authorship note at the top — the code in this repo is co-written with [Claude](https://claude.ai) (Anthropic). The work spanned multi-session pair-programming with live debugging on the Firewalla over SSH, Fluent Bit container troubleshooting, Axiom APL query development, and the discovery that Zeek lowercases MACs while Redis stores them uppercase.
+See the Authorship note at the top — the code in this repo is co-written with [Claude](https://claude.ai) (Anthropic). The work spanned multi-session pair-programming with live debugging on the Firewalla over SSH, Fluent Bit container troubleshooting, and the discovery that Zeek lowercases MACs while Redis stores them uppercase.
 
 ## Acknowledgments
 
