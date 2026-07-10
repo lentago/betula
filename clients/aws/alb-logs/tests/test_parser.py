@@ -111,9 +111,21 @@ class ParseEdgeCaseTest(unittest.TestCase):
     def test_blank_line_returns_none(self):
         self.assertIsNone(parse_line("   "))
 
-    def test_bad_field_count_raises(self):
+    def test_too_few_fields_raises(self):
         with self.assertRaises(ValueError):
             parse_line("http 2018-07-02T22:23:00Z app/x too few fields")
+
+    def test_extra_trailing_fields_tolerated(self):
+        # AWS appends new trailing fields over time; a real 34-field line must
+        # parse (not raise) and still yield the leading visitor-source fields.
+        event = parse_line(sample_lines.EXTENDED_TRAILING_LINE)
+        self.assertEqual(event["client_ip"], "203.0.113.55")
+        self.assertEqual(event["domain_name"], "lentago.dev")
+        self.assertEqual(event["request_url"], "https://lentago.dev:443/")
+        self.assertEqual(event["elb_status_code"], 200)
+        # The last named field (conn_trace_id) still maps correctly; the four
+        # surplus trailing tokens are dropped, not mis-assigned.
+        self.assertEqual(event["conn_trace_id"], "TID_bd7b1888dbb28d409aff3ec7256f89f9")
 
     def test_parse_lines_skips_blanks_and_yields_all(self):
         lines = [""] + sample_lines.ALL_LINES + ["  "]

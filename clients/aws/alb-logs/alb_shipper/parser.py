@@ -52,9 +52,13 @@ ALB_FIELDS = (
     "conn_trace_id",             # newer field; may be absent
 )
 
-# Number of tokens for the two supported log versions.
+# Minimum tokens for a well-formed line: the documented fields without the
+# optional trailing conn_trace_id. AWS *appends* new trailing fields to the ALB
+# log format over time (a real 2026 line already carries 34 tokens, past the 30
+# named above), so there is deliberately no upper bound -- extra trailing tokens
+# are tolerated and dropped (see parse_line). A line with FEWER than this is
+# malformed.
 _MIN_FIELDS = len(ALB_FIELDS) - 1  # without conn_trace_id
-_MAX_FIELDS = len(ALB_FIELDS)
 
 # Match either a double-quoted string (allowing backslash escapes such as the
 # \" that ALB writes inside user_agent) or a run of non-space characters.
@@ -148,17 +152,23 @@ def parse_line(line):
     ALB ``time`` field is mapped to ``_time`` so Axiom uses the request
     timestamp (not ingest time) as the event time.
 
-    Returns ``None`` for blank lines. Raises ``ValueError`` if the line does
-    not have a recognised ALB field count.
+    Returns ``None`` for blank lines. Raises ``ValueError`` only if the line
+    has fewer fields than the known ALB schema; extra trailing fields (which
+    AWS adds to the format over time) are tolerated and ignored.
     """
     line = line.strip()
     if not line:
         return None
 
     tokens = _tokenize(line)
-    if not (_MIN_FIELDS <= len(tokens) <= _MAX_FIELDS):
+    # No upper bound: AWS appends new trailing fields to the ALB log format, so
+    # real lines can carry more tokens than ALB_FIELDS names. The visitor-source
+    # fields all live in the stable leading positions, and dict(zip(...)) below
+    # keeps only the named ones -- surplus trailing tokens fall away. Only a line
+    # too SHORT to cover the known schema is malformed.
+    if len(tokens) < _MIN_FIELDS:
         raise ValueError(
-            f"expected {_MIN_FIELDS}-{_MAX_FIELDS} ALB fields, got {len(tokens)}"
+            f"expected at least {_MIN_FIELDS} ALB fields, got {len(tokens)}"
         )
 
     raw = dict(zip(ALB_FIELDS, tokens))

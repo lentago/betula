@@ -51,4 +51,28 @@ DROPPED_REQUEST_LINE = (
     'TID_1234567890abcdef'
 )
 
-ALL_LINES = [HTTP_LINE, HTTPS_LINE, ESCAPED_UA_LINE, DROPPED_REQUEST_LINE]
+# Real 2026 production line: 34 fields. AWS appends new trailing fields to the
+# ALB format over time -- this line carries conn_trace_id (field 30) plus four
+# more fields the schema does not name (three "-" and a trailing IP). The parser
+# must tolerate the surplus, not raise, and still extract the leading
+# visitor-source fields. Captured shape from solidago-dev-alb.
+EXTENDED_TRAILING_LINE = (
+    'h2 2026-07-09T23:00:00.000000Z app/solidago-dev-alb/9cd2662c6b66898b '
+    '203.0.113.55:44321 10.0.10.4:8080 0.001 0.010 0.000 200 200 42 1024 '
+    '"GET https://lentago.dev:443/ HTTP/2.0" '
+    '"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)" '
+    'TLS_AES_128_GCM_SHA256 TLSv1.3 '
+    'arn:aws:elasticloadbalancing:us-east-1:365184644049:targetgroup/solidago-dev-app-tg/13adb34fe2cf989a '
+    '"Root=1-6a5054b3-030f0db75e12c4425817824e" "lentago.dev" '
+    '"arn:aws:acm:us-east-1:365184644049:certificate/460041fa-52e7-4240-96ee-d1a4b19ad7bf" '
+    '100 2026-07-09T22:59:59.900000Z "forward" "-" "-" "10.0.10.4:8080" "200" "-" "-" '
+    'TID_bd7b1888dbb28d409aff3ec7256f89f9 "-" "-" "-" 100.29.136.126'
+)
+
+ALL_LINES = [
+    HTTP_LINE,
+    HTTPS_LINE,
+    ESCAPED_UA_LINE,
+    DROPPED_REQUEST_LINE,
+    EXTENDED_TRAILING_LINE,
+]
