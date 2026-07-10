@@ -18,4 +18,4 @@ jobs:
       scripts: |
         deploy.sh
         scripts/start_log_shipping.sh
-        scripts/device_lookup_export.sh
+        scripts/gitops-sync.sh

@@ -12,12 +12,6 @@
 # permission error and leaves the crontab empty).
 # =============================================================================
 
-# Export device IP-to-name mappings (with groups) to Axiom every hour
-0 * * * * /home/pi/.firewalla/config/device_lookup_export.sh >> /home/pi/.firewalla/config/device_lookup.log 2>&1
-
-# Run device export once at boot (5 min delay for services to settle)
-@reboot sleep 300 && /home/pi/.firewalla/config/device_lookup_export.sh >> /home/pi/.firewalla/config/device_lookup.log 2>&1
-
 # Clean up rotated Zeek logs every 5 minutes to prevent /bspool tmpfs (30MB)
 # from filling up. Fluent Bit reads from active log files in real time, so
 # rotated copies (dns.2026-03-11-21-24-00.log etc.) are not needed.
@@ -28,14 +22,9 @@
 # Also restarts container if it's stopped/missing.
 */5 * * * * /home/pi/.firewalla/config/fluent_bit_healthcheck.sh 2>&1
 
-# Ship host + Zeek process metrics to Axiom every 5 minutes.
-# Captures RSS/VSZ/CPU per Zeek process and box-level mem/load/bspool stats.
-*/5 * * * * /home/pi/.firewalla/config/system_metrics_export.sh >> /home/pi/.firewalla/config/system_metrics.log 2>&1
-
 # Rotate pipeline log files daily (1 MB cap per file; keeps one .log.1 backup).
-# Handles bspool_cleanup.log, device_lookup.log, fluent-bit-restart.log, and
-# system_metrics.log. fluent-bit-healthcheck.log is self-rotating inside
-# fluent_bit_healthcheck.sh.
+# Handles bspool_cleanup.log and fluent-bit-restart.log.
+# fluent-bit-healthcheck.log is self-rotating inside fluent_bit_healthcheck.sh.
 0 2 * * * /home/pi/.firewalla/config/rotate_logs.sh
 
 # GitOps: pull origin/main, validate, swap live files + restart container on

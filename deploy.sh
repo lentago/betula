@@ -13,7 +13,7 @@
 #
 # Prerequisites:
 #   - SSH access to the Firewalla (pi user)
-#   - .env file configured with your Axiom credentials
+#   - .env file configured with your Grafana Cloud Loki credentials
 #   - Docker enabled on the Firewalla
 # =============================================================================
 
@@ -35,8 +35,10 @@ if [ ! -f ".env" ]; then
     exit 1
 fi
 
-if ! grep -qE '^AXIOM_API_TOKEN=.+' .env || ! grep -qE '^AXIOM_DATASET=.+' .env; then
-    echo "ERROR: .env is missing required keys (AXIOM_API_TOKEN, AXIOM_DATASET). Check env.example."
+if ! grep -qE '^GRAFANA_CLOUD_LOGS_HOST=.+' .env \
+    || ! grep -qE '^GRAFANA_CLOUD_LOGS_USER=.+' .env \
+    || ! grep -qE '^GRAFANA_CLOUD_LOGS_TOKEN=.+' .env; then
+    echo "ERROR: .env is missing required keys (GRAFANA_CLOUD_LOGS_HOST, GRAFANA_CLOUD_LOGS_USER, GRAFANA_CLOUD_LOGS_TOKEN). Check env.example."
     exit 1
 fi
 
@@ -77,8 +79,6 @@ fi
 if copy_if_changed fluent-bit/parsers.conf "${FW_CONFIG}/parsers.conf"; then
     fluent_restart_needed=true
 fi
-copy_if_changed scripts/device_lookup_export.sh "${FW_CONFIG}/device_lookup_export.sh" || true
-copy_if_changed scripts/system_metrics_export.sh "${FW_CONFIG}/system_metrics_export.sh" || true
 copy_if_changed scripts/rotate_logs.sh "${FW_CONFIG}/rotate_logs.sh" || true
 if copy_if_changed scripts/start_log_shipping.sh "${FW_CONFIG}/post_main.d/start_log_shipping.sh"; then
     fluent_restart_needed=true
@@ -94,7 +94,7 @@ fi
 # --- Set permissions ---------------------------------------------------------
 echo "[3/5] Setting permissions..."
 ssh "${FW_USER}@${FW_IP}" \
-    "chmod +x ${FW_CONFIG}/post_main.d/start_log_shipping.sh ${FW_CONFIG}/device_lookup_export.sh ${FW_CONFIG}/system_metrics_export.sh ${FW_CONFIG}/rotate_logs.sh"
+    "chmod +x ${FW_CONFIG}/post_main.d/start_log_shipping.sh ${FW_CONFIG}/rotate_logs.sh"
 
 # --- Start or restart the pipeline conditionally -----------------------------
 echo "[4/5] Managing Fluent Bit container..."
@@ -111,8 +111,8 @@ else
     echo "  Container running, config unchanged — skipping restart."
 fi
 
-# --- Install cron and run initial device export ------------------------------
-echo "[5/5] Installing cron and exporting device inventory..."
+# --- Install cron ------------------------------------------------------------
+echo "[5/5] Installing cron..."
 if [ "$cron_changed" = "true" ]; then
     # Merge via Firewalla's script — NEVER `crontab user_crontab`, which replaces
     # pi's whole crontab and wipes ~60 system jobs (#67). Run as pi (the SSH user),
@@ -123,7 +123,6 @@ if [ "$cron_changed" = "true" ]; then
 else
     echo "  crontab unchanged — skipping reload."
 fi
-ssh "${FW_USER}@${FW_IP}" "sudo ${FW_CONFIG}/device_lookup_export.sh"
 
 echo ""
 echo "=== Deployment complete ==="
@@ -131,4 +130,4 @@ echo ""
 echo "Verify:"
 echo "  ssh ${FW_USER}@${FW_IP} 'sudo docker logs --tail 10 fluent-bit-axiom'"
 echo ""
-echo "Then check Axiom Stream view for incoming events."
+echo "Then check Grafana Cloud Loki (Explore → {job=\"firewalla\"}) for incoming events."

@@ -2,13 +2,13 @@
 # =============================================================================
 # Fluent Bit Health Check
 #
-# Runs every 5 minutes via cron. Checks if Fluent Bit has successfully
-# flushed data to Axiom recently. If it's only producing errors (or no
-# output at all), restarts the container to clear wedged state.
+# Runs every 5 minutes via cron. Inspects recent Fluent Bit output and, if it's
+# only producing errors (or the container is stopped), restarts it to clear
+# wedged state.
 #
 # Catches all known failure modes:
 #   - DNS resolution failures wedging the connection pool
-#   - Axiom outage recovery (503s resolved but flushes stuck)
+#   - Upstream outage recovery (errors resolved but flushes stuck)
 #   - Stale connections after network changes
 #
 # Install location: /home/pi/.firewalla/config/fluent_bit_healthcheck.sh
@@ -19,7 +19,6 @@ set -euo pipefail
 CONTAINER_NAME="fluent-bit-axiom"
 LOGFILE="/home/pi/.firewalla/config/fluent-bit-healthcheck.log"
 CHECK_WINDOW="5m"
-ENV_FILE="/home/pi/.firewalla/config/log_shipping.env"
 readonly LOG_MAX_BYTES=1048576
 
 log() {
@@ -38,36 +37,9 @@ rotate_log() {
 
 rotate_log
 
-# ── Load environment variables ────────────────────────────────────────────────
-if [ -f "$ENV_FILE" ]; then
-    set -a
-    # shellcheck source=/dev/null
-    source "$ENV_FILE"
-    set +a
-fi
-
-# ── Emit restart metric to Axiom (fire-and-forget) ────────────────────────────
-emit_restart_metric() {
-    local reason="$1"
-    local timestamp
-    timestamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
-
-    if [ -z "${AXIOM_API_TOKEN:-}" ] || [ -z "${AXIOM_DATASET:-}" ]; then
-        return 0
-    fi
-
-    curl --silent --max-time 5 \
-        -H "Authorization: Bearer ${AXIOM_API_TOKEN}" \
-        -H "Content-Type: application/json" \
-        -d "[{\"_time\":\"${timestamp}\",\"event_type\":\"health_check_restart\",\"reason\":\"${reason}\"}]" \
-        "https://api.axiom.co/v1/datasets/${AXIOM_DATASET}/ingest" \
-        >/dev/null 2>&1 &
-}
-
 # --- Is the container even running? ------------------------------------------
 if ! sudo docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
     log "Container not running — starting via post_main.d script"
-    emit_restart_metric "container_not_running"
     sudo /home/pi/.firewalla/config/post_main.d/start_log_shipping.sh 2>&1 | tee -a "$LOGFILE" >/dev/null
     exit 0
 fi
@@ -84,8 +56,8 @@ fi
 
 # --- Check for successful activity -------------------------------------------
 # Silence is healthy: Fluent Bit logs nothing when flushes succeed quietly.
-# No-data detection (extended gap with zero events reaching Axiom) is handled
-# by the external Axiom monitor, not this script.
+# No-data detection (extended gap with zero events reaching Loki) is handled
+# by external Grafana Cloud alerting, not this script.
 # Fluent Bit doesn't log successful flushes at "warn" level, but it DOES
 # stay quiet when things are working. Errors are loud. So the logic is:
 #   - If we see errors AND nothing else → stuck
@@ -126,7 +98,6 @@ if [ "$TOTAL_LINES" -gt 0 ]; then
     if [ "$ERROR_RATIO" -gt 80 ]; then
         log "WARNING: ${ERROR_RATIO}% error rate (${ERROR_LINES}/${TOTAL_LINES} lines) — restarting"
         log "Last errors: $(echo "$RECENT_LOGS" | grep '\[error\]' | tail -3)"
-        emit_restart_metric "high error rate: ${ERROR_RATIO}% (${ERROR_LINES}/${TOTAL_LINES} lines)"
         sudo docker restart "$CONTAINER_NAME" >> "$LOGFILE" 2>&1
         log "Container restarted (reason: high error rate)"
         exit 0

@@ -4,43 +4,45 @@
 
 When Claude initializes in this directory, open the first response with a
 brief self-introduction as **Betula Claude** — keeper of the Lentago Labs log
-capture-and-archive layer (per-source collectors → Axiom; Fluent Bit + gitops
+capture layer (per-source collectors → Grafana Cloud Loki; Fluent Bit + gitops
 sync on the Firewalla today). The appliance itself and on-device operations
 are Home Claude's turf — see `~/CLAUDE.md`. One sentence is plenty; don't make
 a meal of it.
 
 ## What This Project Does
 
-**Betula** is the Lentago Labs log capture-and-archive layer — renamed from
+**Betula** is the Lentago Labs log capture layer — renamed from
 `firewalla-axiom-pipeline` on 2026-07-04. Direction of travel: a core/client
 split where the Firewalla is one collector client and the solidago AWS
-platform is the next; betula owns capture + the Axiom archive, its counterpart
-**drosera** owns the live Grafana pane — keep that boundary. **Keep the old
-name on-device**: the clone at `/home/pi/.firewalla/firewalla-axiom-pipeline/`
-and `bootstrap.sh`'s `CLONE_PATH` stay as-is (live gitops path; the device
-remote already points at `lentago/betula`).
+platform is the next. **Keep the old name on-device**: the clone at
+`/home/pi/.firewalla/firewalla-axiom-pipeline/` and `bootstrap.sh`'s
+`CLONE_PATH` stay as-is (live gitops path; the device remote already points at
+`lentago/betula`).
 
-A log-shipping pipeline that captures DNS queries, connection flows, and ACL block events from a **Firewalla Gold SE** appliance and sends them to **Axiom** for 30-day searchable retention and dashboarding. Uses Axiom's free tier (500 GB/month) for zero recurring cost.
+A log-shipping pipeline that captures DNS queries, connection flows, and ACL block events from a **Firewalla Gold SE** appliance and sends them to **Grafana Cloud Loki** for search, dashboards, and alerting via [lentago/drosera](https://github.com/lentago/drosera).
+
+> **Axiom removed (2026-07-09):** betula previously shipped to Axiom as its
+> primary long-retention archive. The Axiom HTTP output, the device-inventory
+> export (`device_lookup_export.sh` → `firewalla-devices`), and the host/Zeek
+> system-metrics export (`system_metrics_export.sh` → `firewalla`) were all
+> removed to reclaim those two Axiom datasets. The Firewalla now ships **only**
+> to Grafana Cloud Loki. The git history before this date holds the Axiom
+> archive path if it's revived as a client later.
 
 ### Data Flow
 
 ```
-Firewalla Zeek logs (dns/conn/ssl) + acl-audit ──► Fluent Bit (Docker) ──┬─► Axiom "firewalla" dataset           (HTTP output, primary)
-                                                                          └─► LAN Loki receiver :3100             (loki output, optional)
-                                                                                                                  └─► Grafana Cloud Loki
-                                                                                                                       (via Alloy on LXC 105)
-Redis device inventory ──► device_lookup_export.sh ──► Axiom "firewalla-devices" dataset
+Firewalla Zeek logs (dns/conn/ssl) + acl-audit ──► Fluent Bit (Docker) ──► Grafana Cloud Loki (direct HTTPS push, no LAN relay)
 ```
 
-The Loki output is independent of the HTTP output — either path runs alone. The optional Loki receiver in the Lentago lab is the Alloy container in [lentago/drosera](https://github.com/lentago/drosera); other consumers (Promtail, Vector, a self-hosted Loki) work too.
+The Loki output is the pipeline's sole output. Any Loki-compatible consumer (Grafana Cloud, a self-hosted Loki, Promtail, Vector) works by swapping the endpoint/creds.
 
 ## Tech Stack
 
 - **Fluent Bit** — Log collection agent (runs as Docker container on Firewalla)
 - **Bash** — All scripts use `set -euo pipefail`
 - **Zeek** — Log format (JSON on recent Firewalla firmware)
-- **Redis** — Device inventory source on the Firewalla appliance
-- **Axiom** — Cloud log analytics (APL query language, Kusto-like)
+- **Grafana Cloud Loki** — Log destination (LogQL; queried in drosera's Grafana)
 - **Docker** — Container runtime on Firewalla
 
 ## Project Structure
@@ -51,24 +53,21 @@ betula/
 ├── README.md                       # User-facing docs, setup, troubleshooting
 ├── LICENSE                         # MIT
 ├── deploy.sh                       # Break-glass workstation deploy via SSH
-├── env.example                     # Template for .env (AXIOM_DATASET, AXIOM_API_TOKEN)
+├── env.example                     # Template for .env (GRAFANA_CLOUD_LOGS_*)
 ├── .gitignore                      # Excludes .env, *.log, /tmp/
 ├── fluent-bit/
-│   ├── fluent-bit.conf             # Inputs + Axiom output + Loki output
+│   ├── fluent-bit.conf             # Inputs + Grafana Cloud Loki output
 │   └── parsers.conf                # Zeek timestamp parser
 ├── scripts/
 │   ├── bootstrap.sh                # One-time on-device clone + cron install
 │   ├── gitops-sync.sh              # 5-min poll → fetch → validate → reload
 │   ├── start_log_shipping.sh       # Docker bootstrap; lives in post_main.d/ on device
 │   ├── fluent_bit_healthcheck.sh   # Cron-driven wedged-container restarter
-│   ├── device_lookup_export.sh     # Redis → Axiom device inventory
-│   └── device_group_upload.sh      # Group metadata helper
+│   └── rotate_logs.sh              # Daily pipeline-log rotation
 ├── cron/
-│   └── user_crontab                # Device export, log cleanup, healthcheck, gitops poll
-├── dashboards/
-│   └── axiom-queries.md            # APL queries for Axiom dashboards
+│   └── user_crontab                # Log cleanup, healthcheck, log rotation, gitops poll
 └── docs/
-    ├── architecture.svg            # Pipeline diagram
+    ├── architecture.svg            # Pipeline diagram (still shows retired Axiom path)
     └── zeek-field-reference.md     # Zeek JSON field reference
 ```
 
@@ -80,15 +79,14 @@ betula/
 | `scripts/gitops-sync.sh` | Poll origin/main, validate, swap live files, restart container | Firewalla (cron, every 5 min) |
 | `scripts/start_log_shipping.sh` | Starts Fluent Bit container; auto-runs after firmware updates | Firewalla (`post_main.d/`) |
 | `scripts/fluent_bit_healthcheck.sh` | Restart wedged container based on log error rate | Firewalla (cron, every 5 min) |
-| `scripts/device_lookup_export.sh` | Exports device names from Redis to Axiom | Firewalla (cron, hourly) |
-| `fluent-bit/fluent-bit.conf` | Defines log inputs + Axiom HTTP output + LAN Loki output | Inside Fluent Bit container |
+| `fluent-bit/fluent-bit.conf` | Defines log inputs + Grafana Cloud Loki output | Inside Fluent Bit container |
 | `deploy.sh` | Break-glass workstation push (when GitOps is unusable) | Developer machine |
 
 ## Coding Conventions
 
 ### Bash Scripts
 - Always start with `#!/usr/bin/env bash` and `set -euo pipefail`
-- Log messages use bracketed prefixes: `[log-shipping]`, `[device-lookup]`
+- Log messages use bracketed prefixes: `[log-shipping]`, `[healthcheck]`
 - Section headers use comment dividers: `# ── Section Name ──`
 - Environment variables: `UPPER_SNAKE_CASE`
 - Exit code `1` for all errors, with descriptive messages
@@ -98,13 +96,10 @@ betula/
 - INI-style format with `[INPUT]`, `[FILTER]`, `[OUTPUT]` sections
 - Sensitive values via `${ENV_VAR}` substitution (never hardcoded)
 - Each input gets a unique `Tag` for routing: `zeek.dns`, `zeek.conn`, `firewalla.acl`
-- Metadata added via `record_modifier` filters
-
-### Axiom / APL Queries
-- Dataset names: `firewalla` (logs), `firewalla-devices` (device lookup)
-- Bracket notation for dotted Zeek fields: `parsed["id.orig_h"]`
-- Device enrichment via `join kind=leftouter` on device lookup dataset
-- Filter bar parameters declared with `declare query_parameters()`
+- Metadata added via `record_modifier` / `modify` filters
+- The `loki` output's stream labels (`job`, `cluster`, `log_source`) are a
+  contract with the drosera Grafana queries — changing one silently empties
+  panels. See README § Loki output contract.
 
 ## Important Paths (on Firewalla)
 
@@ -126,9 +121,9 @@ Defined in `.env` (copied from `env.example`), never committed to git:
 
 | Variable | Example | Used By |
 |----------|---------|---------|
-| `AXIOM_DATASET` | `firewalla` | fluent-bit.conf, device_lookup_export.sh |
-| `AXIOM_API_TOKEN` | `xaat-...` | fluent-bit.conf, device_lookup_export.sh |
-| `AXIOM_LOOKUP_DATASET` | `firewalla-devices` | device_lookup_export.sh |
+| `GRAFANA_CLOUD_LOGS_HOST` | `logs-prod-042.grafana.net` | fluent-bit.conf, start_log_shipping.sh |
+| `GRAFANA_CLOUD_LOGS_USER` | `000000` | fluent-bit.conf, start_log_shipping.sh |
+| `GRAFANA_CLOUD_LOGS_TOKEN` | `glc_...` | fluent-bit.conf, start_log_shipping.sh |
 
 ## Development Workflow
 
@@ -137,7 +132,7 @@ Defined in `.env` (copied from `env.example`), never committed to git:
 2. The Firewalla's GitOps poller picks up the change within 5 min — no SSH
    required for routine config changes.
 3. Check `/home/pi/.firewalla/config/gitops-sync.log` to confirm the apply,
-   and Axiom Stream view / Grafana for the data result.
+   and Grafana (Explore → `{job="firewalla"}`) for the data result.
 
 ### GitOps auto-deploy (the normal path)
 `scripts/gitops-sync.sh` runs every 5 min from `cron/user_crontab`. It
@@ -160,14 +155,11 @@ without `bootstrap.sh`). Steps:
 5. Sets executable permissions on scripts
 6. Runs `start_log_shipping.sh` to (re)start the container
 7. Merges cron jobs from `cron/user_crontab` via Firewalla's `update_crontab.sh` (never a raw `crontab` install — that wipes system jobs, #67)
-8. Runs initial device lookup export
 
 ### Common Troubleshooting
-- **No data in Axiom**: Check `docker logs fluent-bit-axiom` for auth errors
-- **No data in Loki only (Axiom still flowing)**: Check `sudo ss -tn | grep :3100` for connections to the Alloy LXC. If absent and not retrying, restart fluent-bit: `sudo docker restart fluent-bit-axiom`. The pre-#43 cause (`Retry_Limit 3` on the Loki output giving up silently) is fixed; if you see it recur, suspect a different stuck-state.
+- **No data in Loki**: Check `docker logs fluent-bit-axiom` for auth errors (401/403 = bad `GRAFANA_CLOUD_LOGS_*` creds; 5xx = Grafana Cloud outage, retries automatically). The container name is still `fluent-bit-axiom` (unchanged to avoid disturbing the running instance).
 - **A merged PR didn't deploy**: Tail `/home/pi/.firewalla/config/gitops-sync.log`. Look for `Dry-run FAILED` (bad config — rollback already happened, fix the PR), `git fetch failed` (WAN/GitHub), or nothing at all (poller cron not installed — `crontab -l | grep gitops-sync`).
 - **bspool full**: The 5-min cron cleanup job handles rotated logs; verify it's running
-- **Device names missing**: Run `device_lookup_export.sh` manually and check HTTP status
 
 ## Guidelines for AI Assistants
 
@@ -178,7 +170,7 @@ without `bootstrap.sh`). Steps:
 - **Don't add dependencies** — the Firewalla has limited packages; only `bash`, `docker`, `curl`, `redis-cli`, `ssh`, `git`, `flock` are available
 - **Test deploy.sh changes carefully** — it runs over SSH on a production network appliance
 - **Keep .env out of git** — it's in `.gitignore`; use `env.example` as the template
-- **Axiom free tier constraints** — 500 GB/month ingest, 30-day retention; avoid high-cardinality explosions
+- **Grafana Cloud Loki label discipline** — Loki bills and indexes on stream labels; keep them low-cardinality (`job`, `cluster`, `log_source` only). Never promote a high-cardinality Zeek field (IP, domain) to a Loki label — it explodes the stream count. High-cardinality data belongs in the log line, queried with LogQL filters.
 - **Never install the crontab with raw `crontab user_crontab`** — that replaces pi's entire crontab and wipes Firewalla's ~60 system jobs (clean_log, zeekctl crash-recovery, watchdogs, scheduled reboot). This caused a ~15h outage cascade (#67). Always merge via `/home/pi/firewalla/scripts/update_crontab.sh`, run **as pi, never sudo** (as root it fails on a tempfile permission error and empties the crontab). If that script is missing, fail loudly — do not fall back to raw `crontab`.
 - **Cron + docker on Firewalla needs `sudo`** — the `pi` user is in the docker group via PAM at login, but cron sessions don't inherit it (this bit us in #48). Any new script invoked from `user_crontab` that touches docker must use `sudo docker`, not bare `docker`.
 - **Retry_Limit on every fluent-bit OUTPUT is `False`** — finite retries with a long peer outage silently stop the output forever (#43). On-disk buffering bounds the backlog; leave the limit unbounded.

@@ -20,9 +20,11 @@ you want. Always use bracket notation:
 ### MAC addresses are lowercased by Zeek
 
 Zeek writes MAC addresses in lowercase (e.g., `e8:4c:4a:db:9c:e8`). Firewalla's
-Redis device inventory stores them in uppercase (`E8:4C:4A:DB:9C:E8`). The
-`device_lookup_export.sh` script normalises Redis MACs to lowercase before
-writing to the `firewalla-devices` dataset, so joins work correctly.
+Redis device inventory stores them in uppercase (`E8:4C:4A:DB:9C:E8`). Any
+consumer that correlates Zeek events with the Redis device inventory must
+lowercase the Redis MACs first, or the join silently misses. (The former
+`device_lookup_export.sh` device-name export, removed 2026-07-09 with the Axiom
+path, normalised the case for exactly this reason.)
 
 ### Integer fields arrive as strings in some contexts
 
