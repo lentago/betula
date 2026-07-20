@@ -124,7 +124,7 @@
 <g class="c-purple">
   <rect x="50" y="544" width="268" height="82" rx="8" stroke-width="0.5"/>
   <text class="th" x="184" y="562" text-anchor="middle">Grafana Cloud Loki</text>
-  <text class="ts" x="184" y="580" text-anchor="middle">job=firewalla · cluster=firewalla-gold</text>
+  <text class="ts" x="184" y="580" text-anchor="middle">job=firewalla · cluster=lentago-lab</text>
   <text class="ts" x="184" y="598" text-anchor="middle">log_source: zeek_dns, zeek_conn,</text>
   <text class="ts" x="184" y="616" text-anchor="middle">zeek_ssl, firewalla_acl</text>
 </g>

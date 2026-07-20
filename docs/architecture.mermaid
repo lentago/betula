@@ -16,7 +16,7 @@ flowchart TD
     end
 
     subgraph GC["Grafana Cloud (lentago.grafana.net) — sole output"]
-        L["Grafana Cloud Loki<br/>job=firewalla · cluster=firewalla-gold<br/>log_source: zeek_dns, zeek_conn, zeek_ssl, firewalla_acl"]
+        L["Grafana Cloud Loki<br/>job=firewalla · cluster=lentago-lab<br/>log_source: zeek_dns, zeek_conn, zeek_ssl, firewalla_acl"]
         G["Grafana Cloud<br/>Dashboards · Alerts · LogQL<br/>lentago/drosera"]
     end
 
