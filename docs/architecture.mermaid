@@ -1,0 +1,29 @@
+%%
+%% Betula architecture — editable Mermaid source.
+%% Render: paste into https://mermaid.live  or  mmdc -i architecture.mermaid -o architecture.svg
+%% The hand-styled SVG (architecture.svg) is the canonical diagram; keep this in sync when editing.
+%%
+flowchart TD
+    subgraph FW["Firewalla Gold SE (192.168.139.1)"]
+        Z["Zeek IDS<br/>/bspool/manager/dns.log<br/>/bspool/manager/conn.log<br/>/bspool/manager/ssl.log"]
+        ACL["ACL audit log<br/>/alog/acl-audit.log<br/>kernel iptables FW_ADT lines"]
+
+        FB["Fluent Bit (Docker)<br/>fluent/fluent-bit:latest<br/>~/.firewalla/config/fluent-bit.conf<br/>--network host --restart always"]
+
+        HC["Health check<br/>fluent_bit_healthcheck.sh<br/>cron: */5 * * * *"]
+        TC["tmpfs cleanup<br/>/bspool 30 MB ramdisk<br/>cron: */5 * * * *"]
+        GS["gitops-sync.sh<br/>origin/main poll · dry-run validate<br/>cron: */5 * * * *"]
+    end
+
+    subgraph GC["Grafana Cloud (lentago.grafana.net) — sole output"]
+        L["Grafana Cloud Loki<br/>job=firewalla · cluster=lentago-lab<br/>log_source: zeek_dns, zeek_conn, zeek_ssl, firewalla_acl"]
+        G["Grafana Cloud<br/>Dashboards · Alerts · LogQL<br/>lentago/drosera"]
+    end
+
+    Z --> FB
+    ACL --> FB
+    HC -. "restart if wedged" .-> FB
+    TC -. "clean bspool" .-> FB
+    GS -. "dry-run → swap config" .-> FB
+    FB -->|"HTTPS :443 · [OUTPUT] loki · Retry_Limit False"| L
+    L --> G
