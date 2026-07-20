@@ -1,11 +1,11 @@
-<svg width="100%" viewBox="0 0 680 1010" xmlns="http://www.w3.org/2000/svg">
+<svg width="100%" viewBox="0 0 680 660" xmlns="http://www.w3.org/2000/svg">
 <style>
   text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
   .th { font-size: 14px; font-weight: 500; fill: #3d3d3a; }
   .ts { font-size: 12px; font-weight: 400; fill: #73726c; }
-  .arr { stroke: #73726c; stroke-width: 1.5; }
+  .arr { stroke: #73726c; stroke-width: 1.5; fill: none; }
 
-  .c-teal > rect { fill: #E1F5EE; stroke: #0F6E56; }
+  .c-teal > rect  { fill: #E1F5EE; stroke: #0F6E56; }
   .c-teal > text.th { fill: #085041; }
   .c-teal > text.ts { fill: #0F6E56; }
 
@@ -13,27 +13,19 @@
   .c-purple > text.th { fill: #3C3489; }
   .c-purple > text.ts { fill: #534AB7; }
 
-  .c-blue > rect { fill: #E6F1FB; stroke: #185FA5; }
+  .c-blue > rect   { fill: #E6F1FB; stroke: #185FA5; }
   .c-blue > text.th { fill: #0C447C; }
   .c-blue > text.ts { fill: #185FA5; }
 
-  .c-green > rect { fill: #EAF3DE; stroke: #3B6D11; }
+  .c-green > rect  { fill: #EAF3DE; stroke: #3B6D11; }
   .c-green > text.th { fill: #27500A; }
   .c-green > text.ts { fill: #3B6D11; }
 
-  .c-amber > rect { fill: #FAEEDA; stroke: #854F0B; }
+  .c-amber > rect  { fill: #FAEEDA; stroke: #854F0B; }
   .c-amber > text.th { fill: #633806; }
   .c-amber > text.ts { fill: #854F0B; }
 
-  .c-coral > rect { fill: #FAECE7; stroke: #993C1D; }
-  .c-coral > text.th { fill: #712B13; }
-  .c-coral > text.ts { fill: #993C1D; }
-
-  .c-pink > rect { fill: #FBEAF0; stroke: #993556; }
-  .c-pink > text.th { fill: #72243E; }
-  .c-pink > text.ts { fill: #993556; }
-
-  .c-navy > rect { fill: #E4E8F0; stroke: #1a1a2e; }
+  .c-navy > rect   { fill: #E4E8F0; stroke: #1a1a2e; }
   .c-navy > text.th { fill: #1a1a2e; }
   .c-navy > text.ts { fill: #3d5a80; }
 </style>
@@ -45,160 +37,110 @@
 
 <!-- Firewalla hardware boundary -->
 <g class="c-teal">
-  <rect x="30" y="20" width="620" height="520" rx="20" stroke-width="0.5"/>
+  <rect x="30" y="20" width="620" height="428" rx="20" stroke-width="0.5"/>
   <text class="th" x="340" y="46" text-anchor="middle">Firewalla Gold SE (192.168.139.1)</text>
   <text class="ts" x="340" y="64" text-anchor="middle">ARM64 · 4 GB RAM · 32 GB eMMC · Debian</text>
 </g>
 
 <!-- Data sources -->
 <g class="c-purple">
-  <rect x="50" y="84" width="175" height="86" rx="8" stroke-width="0.5"/>
-  <text class="th" x="137" y="102" text-anchor="middle" dominant-baseline="central">Zeek IDS</text>
-  <text class="ts" x="137" y="120" text-anchor="middle" dominant-baseline="central">/bspool/manager/dns.log</text>
-  <text class="ts" x="137" y="138" text-anchor="middle" dominant-baseline="central">/bspool/manager/conn.log</text>
-  <text class="ts" x="137" y="156" text-anchor="middle" dominant-baseline="central">/bspool/manager/ssl.log</text>
+  <rect x="50" y="82" width="220" height="90" rx="8" stroke-width="0.5"/>
+  <text class="th" x="160" y="100" text-anchor="middle">Zeek IDS</text>
+  <text class="ts" x="160" y="118" text-anchor="middle">/bspool/manager/dns.log</text>
+  <text class="ts" x="160" y="136" text-anchor="middle">/bspool/manager/conn.log</text>
+  <text class="ts" x="160" y="154" text-anchor="middle">/bspool/manager/ssl.log</text>
 </g>
 
 <g class="c-purple">
-  <rect x="252" y="84" width="175" height="86" rx="8" stroke-width="0.5"/>
-  <text class="th" x="340" y="102" text-anchor="middle" dominant-baseline="central">Redis (localhost:6379)</text>
-  <text class="ts" x="340" y="120" text-anchor="middle" dominant-baseline="central">host:mac:* keys</text>
-  <text class="ts" x="340" y="138" text-anchor="middle" dominant-baseline="central">bname, ipv4Addr, mac</text>
+  <rect x="408" y="82" width="222" height="90" rx="8" stroke-width="0.5"/>
+  <text class="th" x="519" y="100" text-anchor="middle">ACL audit log</text>
+  <text class="ts" x="519" y="118" text-anchor="middle">/alog/acl-audit.log</text>
+  <text class="ts" x="519" y="136" text-anchor="middle">kernel iptables FW_ADT lines</text>
+  <text class="ts" x="519" y="154" text-anchor="middle">(was acl-alarm.log pre-firmware)</text>
 </g>
 
-<g class="c-purple">
-  <rect x="454" y="84" width="175" height="86" rx="8" stroke-width="0.5"/>
-  <text class="th" x="541" y="102" text-anchor="middle" dominant-baseline="central">ACL audit log</text>
-  <text class="ts" x="541" y="120" text-anchor="middle" dominant-baseline="central">/alog/acl-audit.log</text>
-  <text class="ts" x="541" y="138" text-anchor="middle" dominant-baseline="central">kernel iptables FW_ADT lines</text>
-  <text class="ts" x="541" y="156" text-anchor="middle" dominant-baseline="central">(was acl-alarm.log pre-firmware)</text>
-</g>
+<!-- Source → Fluent Bit arrows -->
+<line x1="160" y1="172" x2="242" y2="226" class="arr" marker-end="url(#arrow)"/>
+<line x1="519" y1="172" x2="418" y2="226" class="arr" marker-end="url(#arrow)"/>
 
-<!-- Processors -->
+<!-- Fluent Bit -->
 <g class="c-blue">
-  <rect x="50" y="234" width="230" height="80" rx="8" stroke-width="0.5"/>
-  <text class="th" x="165" y="254" text-anchor="middle" dominant-baseline="central">Fluent Bit (Docker)</text>
-  <text class="ts" x="165" y="272" text-anchor="middle" dominant-baseline="central">fluent/fluent-bit:latest</text>
-  <text class="ts" x="165" y="290" text-anchor="middle" dominant-baseline="central">~/.firewalla/config/fluent-bit.conf</text>
-  <text class="ts" x="165" y="304" text-anchor="middle" dominant-baseline="central">--network host --restart always</text>
+  <rect x="165" y="228" width="330" height="84" rx="8" stroke-width="0.5"/>
+  <text class="th" x="330" y="250" text-anchor="middle">Fluent Bit (Docker)</text>
+  <text class="ts" x="330" y="268" text-anchor="middle">fluent/fluent-bit:latest · --network host --restart always</text>
+  <text class="ts" x="330" y="286" text-anchor="middle">~/.firewalla/config/fluent-bit.conf</text>
+  <text class="ts" x="330" y="304" text-anchor="middle">container name: fluent-bit-axiom</text>
 </g>
 
-<g class="c-blue">
-  <rect x="310" y="234" width="320" height="80" rx="8" stroke-width="0.5"/>
-  <text class="th" x="470" y="254" text-anchor="middle" dominant-baseline="central">Device export</text>
-  <text class="ts" x="470" y="272" text-anchor="middle" dominant-baseline="central">~/.firewalla/config/device_lookup_export.sh</text>
-  <text class="ts" x="470" y="290" text-anchor="middle" dominant-baseline="central">Cron: 0 * * * * (hourly)</text>
-  <text class="ts" x="470" y="304" text-anchor="middle" dominant-baseline="central">Merges Redis inventory + group mapping</text>
-</g>
-
-<!-- Source → Processor arrows -->
-<line x1="137" y1="170" x2="137" y2="232" class="arr" marker-end="url(#arrow)"/>
-<line x1="340" y1="170" x2="470" y2="232" class="arr" marker-end="url(#arrow)"/>
-<line x1="541" y1="170" x2="220" y2="232" class="arr" marker-end="url(#arrow)"/>
-
-<!-- Self-healing + config -->
+<!-- Management row -->
 <g class="c-green">
-  <rect x="50" y="360" width="175" height="68" rx="8" stroke-width="0.5"/>
-  <text class="th" x="137" y="378" text-anchor="middle" dominant-baseline="central">Health check</text>
-  <text class="ts" x="137" y="396" text-anchor="middle" dominant-baseline="central">fluent_bit_healthcheck.sh</text>
-  <text class="ts" x="137" y="414" text-anchor="middle" dominant-baseline="central">Cron: */5 * * * *</text>
+  <rect x="50" y="358" width="175" height="68" rx="8" stroke-width="0.5"/>
+  <text class="th" x="137" y="376" text-anchor="middle">Health check</text>
+  <text class="ts" x="137" y="394" text-anchor="middle">fluent_bit_healthcheck.sh</text>
+  <text class="ts" x="137" y="412" text-anchor="middle">Cron: */5 * * * *</text>
 </g>
 
 <g class="c-green">
-  <rect x="250" y="360" width="175" height="68" rx="8" stroke-width="0.5"/>
-  <text class="th" x="337" y="378" text-anchor="middle" dominant-baseline="central">tmpfs cleanup</text>
-  <text class="ts" x="337" y="396" text-anchor="middle" dominant-baseline="central">/bspool 30 MB ramdisk</text>
-  <text class="ts" x="337" y="414" text-anchor="middle" dominant-baseline="central">Cron: */5 * * * *</text>
+  <rect x="252" y="358" width="172" height="68" rx="8" stroke-width="0.5"/>
+  <text class="th" x="338" y="376" text-anchor="middle">tmpfs cleanup</text>
+  <text class="ts" x="338" y="394" text-anchor="middle">/bspool 30 MB ramdisk</text>
+  <text class="ts" x="338" y="412" text-anchor="middle">Cron: */5 * * * *</text>
 </g>
 
 <g class="c-amber">
-  <rect x="450" y="360" width="180" height="68" rx="8" stroke-width="0.5"/>
-  <text class="th" x="540" y="378" text-anchor="middle" dominant-baseline="central">device_groups.json</text>
-  <text class="ts" x="540" y="396" text-anchor="middle" dominant-baseline="central">~/.firewalla/config/</text>
-  <text class="ts" x="540" y="414" text-anchor="middle" dominant-baseline="central">device → group mapping</text>
+  <rect x="452" y="358" width="178" height="68" rx="8" stroke-width="0.5"/>
+  <text class="th" x="541" y="376" text-anchor="middle">gitops-sync.sh</text>
+  <text class="ts" x="541" y="394" text-anchor="middle">origin/main poll · validate</text>
+  <text class="ts" x="541" y="412" text-anchor="middle">Cron: */5 * * * *</text>
 </g>
 
-<!-- Self-healing dashed arrows -->
-<line x1="137" y1="360" x2="150" y2="316" class="arr" marker-end="url(#arrow)" stroke-dasharray="4 3"/>
-<line x1="337" y1="360" x2="180" y2="316" class="arr" marker-end="url(#arrow)" stroke-dasharray="4 3"/>
-<line x1="540" y1="360" x2="500" y2="316" class="arr" marker-end="url(#arrow)" stroke-dasharray="4 3"/>
+<!-- Management → Fluent Bit dashed arrows -->
+<line x1="137" y1="358" x2="220" y2="312" class="arr" marker-end="url(#arrow)" stroke-dasharray="4 3"/>
+<line x1="338" y1="358" x2="330" y2="312" class="arr" marker-end="url(#arrow)" stroke-dasharray="4 3"/>
+<line x1="541" y1="358" x2="440" y2="312" class="arr" marker-end="url(#arrow)" stroke-dasharray="4 3"/>
 
 <!-- Persistence note -->
-<text class="ts" x="340" y="452" text-anchor="middle">All configs persist at /home/pi/.firewalla/config/ · Startup via post_main.d/start_log_shipping.sh</text>
-
-<!-- Dual-output annotation inside Firewalla box -->
-<text class="th" x="340" y="492" text-anchor="middle">Fluent Bit ships every event to TWO destinations</text>
-<text class="ts" x="340" y="510" text-anchor="middle">[OUTPUT] http → Axiom (primary)    ·    [OUTPUT] loki → LAN Alloy (optional add-on)</text>
-<text class="ts" x="340" y="526" text-anchor="middle">Either one is enough; both run in parallel without coordination.</text>
+<text class="ts" x="340" y="444" text-anchor="middle">All configs persist at /home/pi/.firewalla/config/ · startup via post_main.d/start_log_shipping.sh</text>
 
 <!-- Network boundary -->
-<line x1="60" y1="568" x2="620" y2="568" stroke="#73726c" stroke-width="0.5" stroke-dasharray="6 4"/>
-<text class="ts" x="340" y="586" text-anchor="middle">No inbound ports — all output is initiated by Fluent Bit</text>
+<line x1="60" y1="456" x2="620" y2="456" stroke="#73726c" stroke-width="0.5" stroke-dasharray="6 4"/>
+<text class="ts" x="340" y="474" text-anchor="middle">No inbound ports — Fluent Bit initiates all output via direct HTTPS push</text>
 
-<!-- ============== DESTINATION 1: AXIOM ============== -->
-<g class="c-coral">
-  <rect x="30" y="600" width="620" height="178" rx="20" stroke-width="0.5"/>
-  <text class="th" x="340" y="622" text-anchor="middle">Axiom cloud (free tier) — HTTPS to api.axiom.co:443</text>
-  <text class="ts" x="340" y="640" text-anchor="middle">app.axiom.co · 500 GB/month · 30-day retention · $0/month</text>
-</g>
+<!-- Fluent Bit → Loki main arrow (solid, drawn after management boxes) -->
+<line x1="330" y1="312" x2="184" y2="536" class="arr" marker-end="url(#arrow)"/>
 
-<g class="c-pink">
-  <rect x="50" y="658" width="175" height="68" rx="8" stroke-width="0.5"/>
-  <text class="th" x="137" y="676" text-anchor="middle" dominant-baseline="central">firewalla dataset</text>
-  <text class="ts" x="137" y="694" text-anchor="middle" dominant-baseline="central">zeek_dns, zeek_conn,</text>
-  <text class="ts" x="137" y="712" text-anchor="middle" dominant-baseline="central">zeek_ssl, firewalla_acl</text>
-</g>
+<!-- Arrow label in free space below FB box, right of arrow -->
+<text class="ts" x="346" y="328" text-anchor="start">HTTPS :443</text>
+<text class="ts" x="346" y="344" text-anchor="start">[OUTPUT] loki</text>
 
-<g class="c-pink">
-  <rect x="252" y="658" width="175" height="68" rx="8" stroke-width="0.5"/>
-  <text class="th" x="340" y="676" text-anchor="middle" dominant-baseline="central">firewalla-devices</text>
-  <text class="ts" x="340" y="694" text-anchor="middle" dominant-baseline="central">ipv4, mac (lowercase)</text>
-  <text class="ts" x="340" y="712" text-anchor="middle" dominant-baseline="central">name, group</text>
-</g>
-
-<g class="c-pink">
-  <rect x="454" y="658" width="175" height="68" rx="8" stroke-width="0.5"/>
-  <text class="th" x="541" y="676" text-anchor="middle" dominant-baseline="central">Dashboards (APL)</text>
-  <text class="ts" x="541" y="694" text-anchor="middle" dominant-baseline="central">Network overview</text>
-  <text class="ts" x="541" y="712" text-anchor="middle" dominant-baseline="central">DNS monitor</text>
-</g>
-
-<text class="ts" x="340" y="758" text-anchor="middle">Datasets ←→ Dashboards: APL joins on MAC</text>
-
-<!-- Fluent Bit → Axiom (HTTP output) -->
-<line x1="165" y1="314" x2="137" y2="656" class="arr" marker-end="url(#arrow)"/>
-<line x1="470" y1="314" x2="340" y2="656" class="arr" marker-end="url(#arrow)"/>
-
-<!-- ============== DESTINATION 2: ALLOY → GRAFANA CLOUD ============== -->
+<!-- Grafana Cloud outer boundary -->
 <g class="c-navy">
-  <rect x="30" y="800" width="620" height="178" rx="20" stroke-width="0.5"/>
-  <text class="th" x="340" y="822" text-anchor="middle">Optional: Grafana Cloud via Alloy on a LAN host</text>
-  <text class="ts" x="340" y="840" text-anchor="middle">push to 192.168.139.20:3100 (Promtail-compatible) · Alloy relays to Grafana Cloud Loki</text>
+  <rect x="30" y="490" width="620" height="156" rx="20" stroke-width="0.5"/>
+  <text class="th" x="340" y="512" text-anchor="middle">Grafana Cloud (lentago.grafana.net) — sole output</text>
+  <text class="ts" x="340" y="530" text-anchor="middle">direct HTTPS push · no LAN relay</text>
 </g>
 
-<g class="c-blue">
-  <rect x="50" y="858" width="270" height="100" rx="8" stroke-width="0.5"/>
-  <text class="th" x="185" y="878" text-anchor="middle" dominant-baseline="central">Alloy (LXC 105 on Proxmox)</text>
-  <text class="ts" x="185" y="896" text-anchor="middle" dominant-baseline="central">loki.source.api :3100 (push receiver)</text>
-  <text class="ts" x="185" y="914" text-anchor="middle" dominant-baseline="central">loki.write → Grafana Cloud Loki</text>
-  <text class="ts" x="185" y="932" text-anchor="middle" dominant-baseline="central">See lentago/drosera</text>
-</g>
-
+<!-- Loki box -->
 <g class="c-purple">
-  <rect x="350" y="858" width="280" height="100" rx="8" stroke-width="0.5"/>
-  <text class="th" x="490" y="878" text-anchor="middle" dominant-baseline="central">Grafana Cloud Loki</text>
-  <text class="ts" x="490" y="896" text-anchor="middle" dominant-baseline="central">lentago.grafana.net (free tier)</text>
-  <text class="ts" x="490" y="914" text-anchor="middle" dominant-baseline="central">log_source: zeek_dns, _conn, _ssl,</text>
-  <text class="ts" x="490" y="932" text-anchor="middle" dominant-baseline="central">firewalla_acl</text>
+  <rect x="50" y="544" width="268" height="82" rx="8" stroke-width="0.5"/>
+  <text class="th" x="184" y="562" text-anchor="middle">Grafana Cloud Loki</text>
+  <text class="ts" x="184" y="580" text-anchor="middle">job=firewalla · cluster=firewalla-gold</text>
+  <text class="ts" x="184" y="598" text-anchor="middle">log_source: zeek_dns, zeek_conn,</text>
+  <text class="ts" x="184" y="616" text-anchor="middle">zeek_ssl, firewalla_acl</text>
 </g>
 
-<!-- Fluent Bit → Alloy (Loki output) -->
-<line x1="200" y1="314" x2="185" y2="856" class="arr" marker-end="url(#arrow)" stroke-dasharray="4 3"/>
-<text class="ts" x="40" y="600" text-anchor="start">via [OUTPUT] loki to LAN</text>
+<!-- Grafana / drosera box -->
+<g class="c-amber">
+  <rect x="360" y="544" width="268" height="82" rx="8" stroke-width="0.5"/>
+  <text class="th" x="494" y="562" text-anchor="middle">Grafana Cloud</text>
+  <text class="ts" x="494" y="580" text-anchor="middle">Dashboards · Alerts · LogQL</text>
+  <text class="ts" x="494" y="598" text-anchor="middle">lentago/drosera</text>
+  <text class="ts" x="494" y="616" text-anchor="middle">lentago.grafana.net</text>
+</g>
 
-<!-- Alloy → Cloud -->
-<line x1="320" y1="906" x2="348" y2="906" class="arr" marker-end="url(#arrow)"/>
+<!-- Loki → Grafana arrow -->
+<line x1="318" y1="585" x2="358" y2="585" class="arr" marker-end="url(#arrow)"/>
 
 <!-- Legend -->
-<text class="ts" x="50" y="998" text-anchor="start">Purple = data sources / cloud storage · Blue = shippers · Green = self-healing · Amber = config · Pink = Axiom · Navy = optional add-on</text>
+<text class="ts" x="50" y="655" text-anchor="start">Purple = data sources / Loki · Blue = Fluent Bit shipper · Green = self-healing · Amber = config / dashboards · Navy = cloud boundary</text>
 </svg>
