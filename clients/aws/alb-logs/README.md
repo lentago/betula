@@ -92,6 +92,53 @@ fields.
 Field order follows the AWS reference:
 <https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-access-logs.html>
 
+## Client-IP privacy
+
+`client_ip` is **truncated at parse time**, before any record reaches Axiom:
+
+- **IPv4** — last octet zeroed: `1.2.3.4` → `1.2.3.0`
+- **IPv6** — last 64 bits (interface identifier) zeroed: `2001:db8::1:2` → `2001:db8::`
+
+`target_ip` (an internal private address, not a visitor address) is not truncated.
+
+**Why truncation, not raw or hashed?**
+
+Two of the four hosted sites — `pondviewlane.com` and
+`essexcrossingatmontserrat.com` — are public-record references for a specific
+residential subdivision. Visitors are disproportionately the couple of dozen
+households that live there. A full IP plus a timestamp plus a requested path is
+a reasonable proxy for "which neighbour read the HOA covenants, and when." The
+sites are deliberately built not to name residents; raw access logs quietly
+undo some of that.
+
+Truncation was chosen over hashing because:
+- A truncated IP degrades gracefully — it retains coarse geographic and
+  repeat-visitor signal (useful for traffic-volume analytics) without producing
+  a stable pseudonymous identifier.
+- A salted hash produces a unique, reproducible token that is harder to reverse
+  but is still linkable across requests, which is arguably a worse privacy
+  posture than a coarser field.
+
+**Forensics trade-off:** Truncation forecloses single-host attribution. An
+abuse pattern (scraping, credential stuffing) can still be identified by
+/24 prefix and volume, but the exact source address is not recoverable from
+the Axiom record. For this workload — personal/HOA sites with low traffic and
+no significant abuse surface — the privacy benefit outweighs the forensics
+cost. A future collector for a different risk profile should re-evaluate this
+position rather than inherit it silently.
+
+**What this does not fix:** Data already ingested before this change carries
+raw IPs. This change applies only to newly parsed records; the historical
+window is not retroactively sanitised.
+
+**Recommended retention:** The `cjp-solidago-alb` dataset should retain data
+for **30–90 days** — enough for traffic trend analysis, not so long that a
+precise-enough time-of-visit record persists indefinitely. This range follows
+the analysis in lentago/site-pondviewlane-com#23.
+
+> **Manual step for the repo owner:** Set retention in the Axiom console:
+> `cjp-solidago-alb` → Settings → Retention. This cannot be done in code.
+
 ## Running the tests
 
 ```

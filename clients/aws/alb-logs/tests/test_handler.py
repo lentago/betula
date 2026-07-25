@@ -74,7 +74,7 @@ class ProcessEventTest(unittest.TestCase):
             s3_event("a.log"), axiom, object_reader=lambda b, k: body
         )
         self.assertEqual(total, 1)
-        self.assertEqual(axiom.shipped[0]["client_ip"], "192.168.131.39")
+        self.assertEqual(axiom.shipped[0]["client_ip"], "192.168.131.0")  # truncated
 
     def test_multiple_objects_summed(self):
         gz = gzip.compress((sample_lines.HTTP_LINE + "\n").encode("utf-8"))

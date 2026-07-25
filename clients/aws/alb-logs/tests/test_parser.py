@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from alb_shipper.parser import parse_line, parse_lines  # noqa: E402
+from alb_shipper.parser import parse_line, parse_lines, truncate_client_ip  # noqa: E402
 from tests import sample_lines  # noqa: E402
 
 
@@ -19,7 +19,8 @@ class ParseHttpLineTest(unittest.TestCase):
         self.assertNotIn("time", self.event)
 
     def test_client_ip_and_port_split(self):
-        self.assertEqual(self.event["client_ip"], "192.168.131.39")
+        # client_ip is truncated (last octet zeroed) at parse time.
+        self.assertEqual(self.event["client_ip"], "192.168.131.0")
         self.assertEqual(self.event["client_port"], 2817)
 
     def test_target_ip_and_port_split(self):
@@ -119,7 +120,7 @@ class ParseEdgeCaseTest(unittest.TestCase):
         # AWS appends new trailing fields over time; a real 34-field line must
         # parse (not raise) and still yield the leading visitor-source fields.
         event = parse_line(sample_lines.EXTENDED_TRAILING_LINE)
-        self.assertEqual(event["client_ip"], "203.0.113.55")
+        self.assertEqual(event["client_ip"], "203.0.113.0")  # truncated
         self.assertEqual(event["domain_name"], "lentago.dev")
         self.assertEqual(event["request_url"], "https://lentago.dev:443/")
         self.assertEqual(event["elb_status_code"], 200)
@@ -136,6 +137,70 @@ class ParseEdgeCaseTest(unittest.TestCase):
         import types
 
         self.assertIsInstance(parse_lines(iter([])), types.GeneratorType)
+
+
+class TruncateClientIpTest(unittest.TestCase):
+    """Privacy truncation applied to client_ip before Axiom ingest."""
+
+    # ── IPv4 ──────────────────────────────────────────────────────────────────
+
+    def test_ipv4_last_octet_zeroed(self):
+        self.assertEqual(truncate_client_ip("1.2.3.4"), "1.2.3.0")
+
+    def test_ipv4_already_zero_last_octet(self):
+        self.assertEqual(truncate_client_ip("10.0.0.0"), "10.0.0.0")
+
+    def test_ipv4_broadcast_like(self):
+        self.assertEqual(truncate_client_ip("203.0.113.255"), "203.0.113.0")
+
+    def test_ipv4_loopback(self):
+        self.assertEqual(truncate_client_ip("127.0.0.1"), "127.0.0.0")
+
+    def test_ipv4_private_rfc1918(self):
+        self.assertEqual(truncate_client_ip("192.168.131.39"), "192.168.131.0")
+
+    # ── IPv6 ──────────────────────────────────────────────────────────────────
+
+    def test_ipv6_last_64_bits_zeroed(self):
+        # Full 128-bit address: last 64 bits (interface id) cleared.
+        result = truncate_client_ip("2001:db8:dead:beef:1234:5678:90ab:cdef")
+        self.assertEqual(result, "2001:db8:dead:beef::")
+
+    def test_ipv6_already_zeroed_lower_half(self):
+        self.assertEqual(truncate_client_ip("2001:db8::"), "2001:db8::")
+
+    def test_ipv6_loopback(self):
+        # ::1 — last 64 bits include the 1; zeroing yields all-zero = ::
+        self.assertEqual(truncate_client_ip("::1"), "::")
+
+    def test_ipv6_mapped_ipv4(self):
+        # ::ffff:1.2.3.4 is a valid IPv6 address in Python's ipaddress.
+        result = truncate_client_ip("::ffff:1.2.3.4")
+        # Last 64 bits zeroed; the upper 64 are all-zero too, so result is ::
+        self.assertEqual(result, "::")
+
+    # ── Malformed input ───────────────────────────────────────────────────────
+
+    def test_malformed_returns_unchanged(self):
+        self.assertEqual(truncate_client_ip("not-an-ip"), "not-an-ip")
+
+    def test_empty_string_returned_unchanged(self):
+        self.assertEqual(truncate_client_ip(""), "")
+
+    def test_partial_ip_returned_unchanged(self):
+        self.assertEqual(truncate_client_ip("1.2.3"), "1.2.3")
+
+    # ── Applied in parse_line ─────────────────────────────────────────────────
+
+    def test_parse_line_ipv4_truncated(self):
+        event = parse_line(sample_lines.HTTP_LINE)
+        # Raw: 192.168.131.39; truncated: 192.168.131.0
+        self.assertEqual(event["client_ip"], "192.168.131.0")
+
+    def test_parse_line_target_ip_not_truncated(self):
+        # target_ip is an internal address — not a visitor IP, not truncated.
+        event = parse_line(sample_lines.HTTP_LINE)
+        self.assertEqual(event["target_ip"], "10.0.0.1")
 
 
 if __name__ == "__main__":

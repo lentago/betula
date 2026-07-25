@@ -11,8 +11,12 @@ fields that CloudWatch metrics cannot carry: the client IP (split from
 ``client:port``), ``user_agent``, the ``request`` line (split into method /
 url / protocol), and ``domain_name`` (the Host header, which gives the
 per-site breakdown on the drosera pane).
+
+Client IPs are truncated before emission — see ``truncate_client_ip`` and
+the privacy rationale in ``clients/aws/alb-logs/README.md``.
 """
 
+import ipaddress
 import re
 
 # The documented ALB access-log field order. Quoted fields are noted in the
@@ -144,6 +148,25 @@ def _coerce_float(value):
         return value
 
 
+def truncate_client_ip(ip_str):
+    """Return a privacy-preserving truncation of a client IP string.
+
+    IPv4: last octet zeroed  (``1.2.3.4``  → ``1.2.3.0``).
+    IPv6: last 64 bits zeroed (``2001:db8::1:2`` → ``2001:db8::``).
+    Malformed/non-IP input is returned unchanged — never raises.
+
+    See the privacy rationale in ``clients/aws/alb-logs/README.md``.
+    """
+    try:
+        addr = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return ip_str
+    if isinstance(addr, ipaddress.IPv4Address):
+        return str(ipaddress.IPv4Address(addr.packed[:3] + b"\x00"))
+    # IPv6: zero the last 8 bytes (interface identifier).
+    return str(ipaddress.IPv6Address(addr.packed[:8] + b"\x00" * 8))
+
+
 def parse_line(line):
     """Parse a single ALB access-log line into a structured event dict.
 
@@ -190,9 +213,10 @@ def parse_line(line):
         event["_time"] = event.pop("time")
 
     # Split client:port and target:port into their source-signal components.
+    # client_ip is truncated for privacy (last octet / last 64 bits zeroed).
     client_ip, client_port = _split_host_port(raw.get("client_port"))
     if client_ip is not None:
-        event["client_ip"] = client_ip
+        event["client_ip"] = truncate_client_ip(client_ip)
     if client_port is not None:
         event["client_port"] = _coerce_int(client_port)
     else:
