@@ -67,7 +67,7 @@ betula/
 ├── cron/
 │   └── user_crontab                # Log cleanup, healthcheck, log rotation, gitops poll
 └── docs/
-    ├── architecture.svg            # Pipeline diagram (still shows retired Axiom path)
+    ├── architecture.svg            # Pipeline diagram (Loki-only pipeline)
     └── zeek-field-reference.md     # Zeek JSON field reference
 ```
 
