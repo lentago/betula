@@ -589,13 +589,16 @@ May 27 06:46:27 localhost kernel: [652156.583417] [FW_ADT]A=C D=O IN=br0 OUT=eth
 | `SPT=` / `DPT=` | Source / destination ports (TCP/UDP only). |
 | `MARK=` | iptables fwmark — encodes which Firewalla rule fired (decoder varies by firmware). |
 
-See [dashboards/axiom-queries.md](../dashboards/axiom-queries.md#blocked-connections) for an APL example that extracts `SRC`/`DST`/`DPT` from these lines.
+Example LogQL that extracts `SRC`/`DST`/`DPT` from these lines:
+
+```logql
+{job="firewalla"} |= "[FW_ADT]" | regexp "SRC=(?P<src_ip>\\S+) DST=(?P<dst_ip>\\S+).*DPT=(?P<dst_port>\\d+)"
+```
 
 ---
 
 ## Related
 
-- [dashboards/axiom-queries.md](../dashboards/axiom-queries.md) — full set of APL queries using these fields
 - [Zeek DNS log documentation](https://docs.zeek.org/en/master/scripts/base/protocols/dns/main.zeek.html)
 - [Zeek conn log documentation](https://docs.zeek.org/en/master/scripts/base/protocols/conn/main.zeek.html)
 - [Zeek SSL log documentation](https://docs.zeek.org/en/master/scripts/base/protocols/ssl/main.zeek.html)
