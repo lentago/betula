@@ -50,8 +50,6 @@ The Firewalla pushes **directly** to Grafana Cloud Loki over HTTPS — no LAN re
 
 ![Pipeline Architecture](docs/architecture.svg)
 
-_The diagram still depicts the retired Axiom archive path; it will be refreshed in a follow-up._
-
 ## Prerequisites
 
 - **Firewalla Gold SE** (Gold Pro or Purple SE should also work — untested)
