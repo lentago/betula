@@ -54,6 +54,10 @@ live pane. Solidago platform *metrics* reach Grafana via the Phase 1
 CloudWatch datasource — logs never go to Grafana, metrics never come here
 (solidago ADR-0001).
 
+**Privacy:** `client_ip` is truncated at parse time (last octet / last 64
+bits zeroed) before reaching Axiom — see `alb-logs/README.md` § Client-IP
+privacy for the decision rationale and the recommended retention period.
+
 **Overnight gaps are the DR drill:** solidago tears down nightly; ingest
 stops while the platform is down. That is expected, not a betula fault.
 
