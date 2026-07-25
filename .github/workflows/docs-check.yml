@@ -1,0 +1,24 @@
+# ============================================================================
+# docs-check — relative markdown link resolution
+# ============================================================================
+# Thin wrapper around lentago/shared-workflows/docs-check.yml.
+#
+# Deliberately NOT path-filtered: this is built to serve as a required status
+# check, and a required check whose workflow never triggers is held "Expected"
+# forever, deadlocking every non-matching PR (the hard rule in
+# fleet-ops/required-checks.json). The checker is cheap and skips fast when no
+# markdown changed.
+#
+# Origin: lentago/.github#57 — docs-only PRs merged having asserted nothing,
+# and renames/removals are the fleet's most common cause of broken links.
+# ============================================================================
+
+name: docs-check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  docs-check:
+    uses: lentago/shared-workflows/.github/workflows/docs-check.yml@main
