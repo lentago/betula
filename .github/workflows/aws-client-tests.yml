@@ -1,0 +1,42 @@
+# ============================================================================
+# AWS Client Unit Tests
+# ============================================================================
+# Runs the stdlib-only unit suites for the aws client's shippers
+# (clients/aws/alb-logs, clients/aws/cloudwatch-logs). Both are pure and
+# credential-free by design (see clients/aws/README.md) precisely so they can
+# be gated in CI without cloud creds — this workflow is what actually gates
+# them; previously they were documented as a manual
+# `python3 -m unittest discover` step nothing ran (#99).
+#
+# Path-filtered to clients/aws/** to stay cheap, which per the hard rule in
+# fleet-ops/required-checks.json means this must NOT be marked a required
+# status check: a required check whose workflow never triggers on a given PR
+# is held "Expected" forever, deadlocking that PR. (Contrast docs-check.yml,
+# which is deliberately unfiltered so it CAN safely be required.) Leave this
+# one informational/unrequired.
+# ============================================================================
+
+name: AWS Client Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+    paths:
+      - 'clients/aws/**'
+      - '.github/workflows/aws-client-tests.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        client: [alb-logs, cloudwatch-logs]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run unit tests (${{ matrix.client }})
+        working-directory: clients/aws/${{ matrix.client }}
+        run: python3 -m unittest discover -s tests
