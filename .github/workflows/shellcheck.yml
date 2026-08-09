@@ -19,3 +19,6 @@ jobs:
         deploy.sh
         scripts/start_log_shipping.sh
         scripts/gitops-sync.sh
+        scripts/bootstrap.sh
+        scripts/fluent_bit_healthcheck.sh
+        scripts/rotate_logs.sh

@@ -74,9 +74,9 @@ RETRY_COUNT=$(echo "$RECENT_LOGS" | grep -c 'retry in' 2>/dev/null || true)
 
 # If there are retries happening, Fluent Bit is actively trying but failing
 # Check if ALL recent lines are errors/warnings (no successful flushes)
-# `|| true`: grep -v exits 1 if every line is blank, which pipefail would
-# otherwise turn into a script-killing failure; wc still prints 0.
-TOTAL_LINES=$(echo "$RECENT_LOGS" | grep -v '^\s*$' | wc -l || true)
+# `|| true`: grep -c exits 1 if every line is blank, which pipefail would
+# otherwise turn into a script-killing failure; it still prints 0.
+TOTAL_LINES=$(echo "$RECENT_LOGS" | grep -vc '^\s*$' || true)
 ERROR_LINES=$((ERROR_COUNT + WARN_COUNT))
 
 # --- Decision logic ----------------------------------------------------------
@@ -98,6 +98,8 @@ if [ "$TOTAL_LINES" -gt 0 ]; then
     if [ "$ERROR_RATIO" -gt 80 ]; then
         log "WARNING: ${ERROR_RATIO}% error rate (${ERROR_LINES}/${TOTAL_LINES} lines) — restarting"
         log "Last errors: $(echo "$RECENT_LOGS" | grep '\[error\]' | tail -3)"
+        # shellcheck disable=SC2024  # redirect runs as the invoking (pi) user, which
+        # already owns LOGFILE — only the docker command itself needs sudo (#48).
         sudo docker restart "$CONTAINER_NAME" >> "$LOGFILE" 2>&1
         log "Container restarted (reason: high error rate)"
         exit 0
