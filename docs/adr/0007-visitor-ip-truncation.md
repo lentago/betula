@@ -12,10 +12,10 @@ field. Two of the four domains raise this above routine web-log housekeeping:
   references for a specific residential subdivision. Visitors are
   disproportionately the couple dozen households that live there.
 
-Issue #90 documented the sensitivity: "an IP plus a timestamp plus a requested
-path is a reasonable proxy for which neighbour read the HOA covenants, and when.
-The site is built not to name residents; the access log quietly undoes some of
-that."
+Issue #90 documented the sensitivity: an IP plus a timestamp plus a requested
+path "is a reasonable proxy for 'which neighbor read the HOA covenants, and
+when.' The site itself is explicitly built not to name residents; the access
+log quietly undoes some of that."
 
 Measured at the time of issue #90 (2026-07-24): 851 distinct client IPs over 7
 days on pondviewlane.com alone, ~1,000 real requests per day. The data was
@@ -44,11 +44,12 @@ dependencies).
 queryable by anyone with dataset access. The sensitivity documented in issue #90
 makes raw retention the wrong default for this workload.
 
-**Hash the IP** (HMAC or salted hash): explicitly rejected. PR #91: "a salted
-hash is a stable pseudonymous identifier — linkable across requests — which is
-arguably a worse privacy posture than a coarser field that degrades gracefully.
-Truncation destroys the information instead." A hash retains re-identifiability
-across any request window; truncation is a one-way lossy transform.
+**Hash the IP** (HMAC or salted hash): explicitly rejected. PR #91: "A hash
+produces a stable pseudonymous identifier — linkable across requests — which is
+arguably a worse privacy posture than a coarser field that degrades
+gracefully." In the ADR's own gloss: truncation destroys the information
+instead of disguising it — a hash retains re-identifiability across any request
+window, while truncation is a one-way lossy transform.
 
 **Drop `client_ip` entirely** *(retrospective — not considered at the time)*:
 better for privacy, worse for analytics. Truncation retains coarse /24-level
