@@ -118,6 +118,10 @@ The Firewalla pushes **directly** to Grafana Cloud Loki over HTTPS — no LAN re
 
 ![Pipeline Architecture](docs/architecture.svg)
 
+## Architecture decisions
+
+Key design choices — why the pipeline runs on the appliance, why it uses pull-based GitOps, how the Loki label contract works, and more — are recorded in [`docs/adr/`](docs/adr/).
+
 ## GitOps auto-deploy
 
 Once bootstrapped, the Firewalla keeps itself in sync with `origin/main`. The normal change workflow is: open a PR → merge → wait up to 5 minutes for the device to pick it up.
