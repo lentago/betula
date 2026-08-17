@@ -141,8 +141,8 @@ future reader knows how stale the numbers are.
 | Capture-to-searchable latency | ~10–15 s | `Refresh_Interval 2` (Fluent Bit polls log files every 2 s) + `Flush 10` (flushes to Loki every 10 s); Loki indexes on receipt |
 | On-disk backlog during outage | ≤ 50 MB | `storage.total_limit_size 50M` in `fluent-bit.conf`; bounds backlog before the oldest chunks are dropped |
 | Retention window | 14 days | Grafana Cloud Loki free-tier default; adjustable in the Grafana Cloud stack settings |
-| Events/day | *not yet measured — see below* | Varies with network activity; query the live stack |
-| Ingest volume/month | *not yet measured — see below* | Varies with network activity; query the live stack |
+| Events/day | ~1.0 M | Measured 2026-08-17 over a healthy 24 h window (2026-08-13, the last full day before the boot-race outage, #86): `sum(count_over_time({log_source=~"zeek_.*|firewalla_acl"}[24h]))` = 998,949 |
+| Ingest volume | ~470 MB/day (≈14 GB/mo) | Same window: `sum(bytes_over_time(...[24h]))` = 470,545,406 bytes — comfortably inside the Grafana Cloud free tier's 50 GB/mo logs allowance |
 
 **To measure events/day and ingest volume**, run these in Grafana Cloud → Explore (Loki datasource):
 
