@@ -31,6 +31,14 @@ deliberately keeps the old name.
 > The git history before this date documents the Axiom archive path if it needs
 > to be revived as a client later.
 
+**Destination is a per-client decision.** [ADR-0004](docs/adr/0004-loki-sole-destination.md)
+is scoped to the **Firewalla client** — it records the 2026-07-09 decision to make Loki that
+client's sole output. The `clients/aws/` emitters ship to Axiom; that is correct and
+intentional, not a contradiction. The invariant is the **boundary**: betula captures and
+archives, [lentago/drosera](https://github.com/lentago/drosera) owns the live pane, and
+neither grows into the other's role. Picking a different destination for a new client is
+always a valid choice; changing an existing client's destination requires a matching ADR update.
+
 **Authorship:** The Fluent Bit configs, bash scripts, and documentation in this repo are co-written with [Claude](https://claude.ai) (Anthropic). I direct the work and review the output; Claude writes the code. I'm an infrastructure operator, not a software engineer — please don't read this repo as a portfolio of coding ability.
 
 > 🌱 This repo is one exhibit in **[Lentago Labs](https://github.com/lentago)** — a team learning
@@ -121,6 +129,37 @@ The Firewalla pushes **directly** to Grafana Cloud Loki over HTTPS — no LAN re
 ## Architecture decisions
 
 Key design choices — why the pipeline runs on the appliance, why it uses pull-based GitOps, how the Loki label contract works, and more — are recorded in [`docs/adr/`](docs/adr/).
+
+## Pipeline scale
+
+Two figures are derivable from config; two require querying the live stack. The
+LogQL to measure the live ones is below — when you run them, note the date so a
+future reader knows how stale the numbers are.
+
+| Metric | Value | Basis |
+|--------|-------|-------|
+| Capture-to-searchable latency | ~10–15 s | `Refresh_Interval 2` (Fluent Bit polls log files every 2 s) + `Flush 10` (flushes to Loki every 10 s); Loki indexes on receipt |
+| On-disk backlog during outage | ≤ 50 MB | `storage.total_limit_size 50M` in `fluent-bit.conf`; bounds backlog before the oldest chunks are dropped |
+| Retention window | 14 days | Grafana Cloud Loki free-tier default; adjustable in the Grafana Cloud stack settings |
+| Events/day | ~1.0 M | Measured 2026-08-17 over a healthy 24 h window (2026-08-13, the last full day before the boot-race outage, #86): `sum(count_over_time({log_source=~"zeek_.*|firewalla_acl"}[24h]))` = 998,949 |
+| Ingest volume | ~470 MB/day (≈14 GB/mo) | Same window: `sum(bytes_over_time(...[24h]))` = 470,545,406 bytes — comfortably inside the Grafana Cloud free tier's 50 GB/mo logs allowance |
+
+**To measure events/day and ingest volume**, run these in Grafana Cloud → Explore (Loki datasource):
+
+```logql
+# Events over the last 24 hours:
+sum(count_over_time({job="firewalla"}[24h]))
+
+# Ingest volume over the last 30 days (bytes — divide by 1e9 for GB):
+sum(bytes_over_time({job="firewalla"}[30d]))
+```
+
+The Fluent Bit container also exposes a built-in HTTP metrics endpoint for on-device rate checks
+without touching Loki:
+
+```bash
+ssh pi@<fw-ip> 'sudo docker exec fluent-bit-axiom curl -s localhost:2020/api/v1/metrics'
+```
 
 ## GitOps auto-deploy
 
