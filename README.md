@@ -68,7 +68,7 @@ always a valid choice; changing an existing client's destination requires a matc
 
 betula is a source-agnostic capture-and-archive layer where adding a collector is a pure
 PR-merge flow — proven twice (Firewalla→Loki, then AWS→Axiom) without touching the existing
-client. The patterns an IT-ops reader can lift from it:
+client. Here are the patterns you can lift into your own org:
 
 | Pattern | How it shows up here |
 |---|---|
@@ -83,7 +83,9 @@ client. The patterns an IT-ops reader can lift from it:
 
 ## 🛠️ Make a change yourself
 
-This is a lab — the systems are real, the stakes are not. Pick a vector:
+These systems are real, and nothing critical rides on them. That makes this a
+safe place to try a change before you make the same kind of change in your own
+shop. Pick one:
 
 **Add a new log-source collector client.**
 Create a directory under `clients/<platform>/` with a pure, unit-tested shipper (parser + ingest
@@ -500,7 +502,8 @@ See the Authorship note at the top — the code in this repo is co-written with 
 
 ---
 
-> 🌱 **Lentago Labs** is a team learning lab — real systems, non-critical stakes, modern
-> operations patterns demonstrated in the open. Start at the
-> [org profile](https://github.com/lentago), and read this repo on
-> [DeepWiki](https://deepwiki.com/lentago/betula).
+> 🌱 **Lentago Labs** is a pro-bono operations practice for organizations that
+> run on volunteers, donations, and one overworked tech person. Everything here
+> is free to take, and we practice what we publish: our own estate runs this
+> way, in the open. Start at the [org profile](https://github.com/lentago), and
+> read this repo on [DeepWiki](https://deepwiki.com/lentago/betula).
