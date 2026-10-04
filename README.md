@@ -371,6 +371,7 @@ sudo docker restart fluent-bit-axiom
 Common causes:
 - **HTTP 4xx/5xx errors to Loki**: check the `GRAFANA_CLOUD_LOGS_*` creds in `log_shipping.env` (401/403 = bad token/user; 5xx = Grafana Cloud outage — the output retries automatically once it's back)
 - **Container missing**: Firmware update wiped Docker — run `start_log_shipping.sh`
+- **Silent wedge after boot (#86)**: `start_log_shipping.sh` can race Zeek at boot. It now waits up to 5 min for a Zeek log modified in the last 2 min (then starts anyway with a warning), and `fluent_bit_healthcheck.sh` restarts the container if Zeek logs are fresh but nothing under `fluent-bit-data/` (incl. `*.db-wal`) changed in 15 min. A container younger than 15 min is never restarted by this check. Look for `delivery stalled` in `/home/pi/.firewalla/config/fluent-bit-healthcheck.log`
 - **No log files**: Check `ls -la /bspool/manager/dns.log` exists
 - **/bspool full**: See below — this is the most common issue on busy networks
 
