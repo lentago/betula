@@ -6,10 +6,17 @@
 # only producing errors (or the container is stopped), restarts it to clear
 # wedged state.
 #
+# Also runs a delivery-based liveness check (#86): if Zeek is producing logs
+# but Fluent Bit has touched nothing under fluent-bit-data/ (incl. *.db-wal)
+# for DELIVERY_STALL_MIN minutes, the container is wedged silently (no errors
+# logged, so the log-based checks below can't see it) and is restarted. A
+# container started less than DELIVERY_STALL_MIN minutes ago is never restarted.
+#
 # Catches all known failure modes:
 #   - DNS resolution failures wedging the connection pool
 #   - Upstream outage recovery (errors resolved but flushes stuck)
 #   - Stale connections after network changes
+#   - Boot race: tail inputs wedged because Zeek logs weren't ready (#86)
 #
 # Install location: /home/pi/.firewalla/config/fluent_bit_healthcheck.sh
 # =============================================================================
@@ -19,6 +26,10 @@ set -euo pipefail
 CONTAINER_NAME="fluent-bit-axiom"
 LOGFILE="/home/pi/.firewalla/config/fluent-bit-healthcheck.log"
 CHECK_WINDOW="5m"
+readonly DATA_DIR="/home/pi/.firewalla/config/fluent-bit-data"
+readonly ZEEK_DIR="/bspool/manager"
+readonly ZEEK_FRESH_MIN=2
+readonly DELIVERY_STALL_MIN=15
 readonly LOG_MAX_BYTES=1048576
 
 log() {
@@ -41,6 +52,27 @@ rotate_log
 if ! sudo docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
     log "Container not running — starting via post_main.d script"
     sudo /home/pi/.firewalla/config/post_main.d/start_log_shipping.sh 2>&1 | tee -a "$LOGFILE" >/dev/null
+    exit 0
+fi
+
+# --- Delivery-based liveness (#86) -------------------------------------------
+# Must run before the "silence is healthy" exit below: a wedged Fluent Bit logs
+# nothing at all. Zeek producing + no Fluent Bit state writes = not delivering.
+recent_file() {  # recent_file <dir> <minutes> — true if any file was modified within
+    [ -n "$(find "$1" -maxdepth 1 -type f -mmin "-$2" -print -quit 2>/dev/null)" ]
+}
+
+STARTED_AT=$(sudo docker inspect -f '{{.State.StartedAt}}' "$CONTAINER_NAME" 2>/dev/null || true)
+STARTED_EPOCH=$(date -d "$STARTED_AT" +%s 2>/dev/null || true)
+# Unparseable start time → skip the check rather than risk a restart loop.
+if [[ "$STARTED_EPOCH" =~ ^[0-9]+$ ]] \
+    && (( $(date +%s) - STARTED_EPOCH >= DELIVERY_STALL_MIN * 60 )) \
+    && recent_file "$ZEEK_DIR" "$ZEEK_FRESH_MIN" \
+    && ! recent_file "$DATA_DIR" "$DELIVERY_STALL_MIN"; then
+    log "WARNING: Zeek logs are fresh but nothing in ${DATA_DIR} changed in ${DELIVERY_STALL_MIN} min — restarting"
+    # shellcheck disable=SC2024  # redirect runs as pi, which owns LOGFILE (#48)
+    sudo docker restart "$CONTAINER_NAME" >> "$LOGFILE" 2>&1
+    log "Container restarted (reason: delivery stalled)"
     exit 0
 fi
 

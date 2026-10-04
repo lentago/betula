@@ -6,6 +6,11 @@
 #
 # Firewalla runs all scripts in post_main.d/ after every boot and firmware
 # update. This ensures the Fluent Bit container is always running.
+#
+# Boot race (#86): post_main.d can fire before Zeek has recreated its logs on
+# the /bspool tmpfs. A tail input started against missing/stale files can wedge
+# without ever erroring, so we wait (bounded) for a freshly-written Zeek log
+# before launching the container.
 # =============================================================================
 
 set -euo pipefail
@@ -48,6 +53,26 @@ if ! docker info >/dev/null 2>&1; then
     echo "[log-shipping] ERROR: Docker not available after 60 seconds."
     exit 1
 fi
+
+# --- Wait for Zeek logs (boot race, #86) -------------------------------------
+# Bounded: after ZEEK_WAIT_MAX_SECS we proceed anyway so a quiet or broken Zeek
+# can never block log shipping (the healthcheck's delivery check is the backstop).
+readonly ZEEK_WAIT_MAX_SECS=300
+readonly ZEEK_FRESH_MIN=2
+zeek_logs_fresh() {
+    [ -n "$(find /bspool/manager -maxdepth 1 -name '*.log' -mmin "-${ZEEK_FRESH_MIN}" -print -quit 2>/dev/null)" ]
+}
+
+echo "[log-shipping] Waiting for fresh Zeek logs in /bspool/manager (max ${ZEEK_WAIT_MAX_SECS}s)..."
+_waited=0
+until zeek_logs_fresh; do
+    if [ "$_waited" -ge "$ZEEK_WAIT_MAX_SECS" ]; then
+        echo "[log-shipping] WARNING: no Zeek log modified in the last ${ZEEK_FRESH_MIN} min after ${ZEEK_WAIT_MAX_SECS}s — starting anyway"
+        break
+    fi
+    sleep 5
+    _waited=$((_waited + 5))
+done
 
 # --- Create data directory for position tracking -----------------------------
 mkdir -p "${CONFIG_DIR}/fluent-bit-data"
