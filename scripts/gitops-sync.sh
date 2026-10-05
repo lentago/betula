@@ -128,9 +128,10 @@ main() {
         touched_crontab=true
         relevant_changes=true
         ;;
-      scripts/gitops-sync.sh|scripts/bootstrap.sh)
-        # The poller and bootstrap scripts run from the clone, not the live
-        # dir, so a `git reset --hard` already installed the new version.
+      scripts/gitops-sync.sh|scripts/bootstrap.sh|scripts/device_inventory_publish.sh)
+        # The poller, bootstrap, and device-inventory collector run from the
+        # clone, not the live dir, so a `git reset --hard` already installed
+        # the new version.
         ;;
       scripts/*.sh)
         touched_scripts=true

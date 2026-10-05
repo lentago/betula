@@ -33,7 +33,14 @@ A log-shipping pipeline that captures DNS queries, connection flows, and ACL blo
 
 ```
 Firewalla Zeek logs (dns/conn/ssl) + acl-audit ──► Fluent Bit (Docker) ──► Grafana Cloud Loki (direct HTTPS push, no LAN relay)
+Firewalla redis device inventory ──► device_inventory_publish.sh (hourly cron) ──► central Alloy :3100 (LAN) ──► Grafana Cloud Loki
 ```
+
+The device-inventory collector (#115, moved from drosera) is the one stream
+that still relays through drosera's central Alloy (drosera ADR-0006); whether
+it should push direct like the Zeek streams is drosera#243. Its stream
+contract (`log_source="device_inventory"`, `dev="<name>|<ip>"`, JSON line) is
+an interface drosera's dashboards depend on — see the script header.
 
 The Loki output is the pipeline's sole output. Any Loki-compatible consumer (Grafana Cloud, a self-hosted Loki, Promtail, Vector) works by swapping the endpoint/creds.
 
@@ -63,9 +70,10 @@ betula/
 │   ├── gitops-sync.sh              # 5-min poll → fetch → validate → reload
 │   ├── start_log_shipping.sh       # Docker bootstrap; lives in post_main.d/ on device
 │   ├── fluent_bit_healthcheck.sh   # Cron-driven wedged-container restarter
-│   └── rotate_logs.sh              # Daily pipeline-log rotation
+│   ├── rotate_logs.sh              # Daily pipeline-log rotation
+│   └── device_inventory_publish.sh # Hourly redis device inventory → Loki (runs from the clone)
 ├── cron/
-│   └── user_crontab                # Log cleanup, healthcheck, log rotation, gitops poll
+│   └── user_crontab                # Log cleanup, healthcheck, log rotation, gitops poll, device inventory
 └── docs/
     ├── architecture.svg            # Pipeline diagram (Loki-only pipeline)
     └── zeek-field-reference.md     # Zeek JSON field reference
@@ -79,6 +87,7 @@ betula/
 | `scripts/gitops-sync.sh` | Poll origin/main, validate, swap live files, restart container | Firewalla (cron, every 5 min) |
 | `scripts/start_log_shipping.sh` | Starts Fluent Bit container; auto-runs after firmware updates | Firewalla (`post_main.d/`) |
 | `scripts/fluent_bit_healthcheck.sh` | Restart wedged container based on log error rate | Firewalla (cron, every 5 min) |
+| `scripts/device_inventory_publish.sh` | Push redis device inventory as `log_source="device_inventory"` | Firewalla (cron, hourly, from the clone) |
 | `fluent-bit/fluent-bit.conf` | Defines log inputs + Grafana Cloud Loki output | Inside Fluent Bit container |
 | `deploy.sh` | Break-glass workstation push (when GitOps is unusable) | Developer machine |
 

@@ -30,3 +30,11 @@
 # GitOps: pull origin/main, validate, swap live files + restart container on
 # diff. Silent when up-to-date. See scripts/gitops-sync.sh and README §GitOps.
 */5 * * * * /home/pi/.firewalla/firewalla-axiom-pipeline/scripts/gitops-sync.sh 2>&1
+
+# Device-inventory collector (#115): hourly push of the box's redis device
+# inventory to Loki as log_source="device_inventory" (consumed by drosera's
+# dashboards). Runs from the gitops clone, like the poller above, so merging a
+# change to scripts/device_inventory_publish.sh is the deploy. Lives here
+# because user_crontab is the one crontab source that survives Firewalla's
+# update_crontab.sh rebuilds (drosera#151).
+17 * * * * /home/pi/.firewalla/firewalla-axiom-pipeline/scripts/device_inventory_publish.sh >> /home/pi/.firewalla/config/device_inventory.log 2>&1

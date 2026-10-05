@@ -20,6 +20,7 @@ rotate_one() {
 }
 
 rotate_one "${LOG_DIR}/bspool_cleanup.log"
+rotate_one "${LOG_DIR}/device_inventory.log"
 rotate_one "${LOG_DIR}/device_lookup.log"
 rotate_one "${LOG_DIR}/fluent-bit-restart.log"
 rotate_one "${LOG_DIR}/system_metrics.log"
