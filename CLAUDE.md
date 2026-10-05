@@ -65,7 +65,7 @@ betula/
 │   ├── fluent_bit_healthcheck.sh   # Cron-driven wedged-container restarter
 │   └── rotate_logs.sh              # Daily pipeline-log rotation
 ├── cron/
-│   └── user_crontab                # Log cleanup, healthcheck, log rotation, gitops poll
+│   └── user_crontab                # Log cleanup, healthcheck, log rotation, gitops poll, drosera device-inventory schedule
 └── docs/
     ├── architecture.svg            # Pipeline diagram (Loki-only pipeline)
     └── zeek-field-reference.md     # Zeek JSON field reference

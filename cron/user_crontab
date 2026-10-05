@@ -30,3 +30,13 @@
 # GitOps: pull origin/main, validate, swap live files + restart container on
 # diff. Silent when up-to-date. See scripts/gitops-sync.sh and README §GitOps.
 */5 * * * * /home/pi/.firewalla/firewalla-axiom-pipeline/scripts/gitops-sync.sh 2>&1
+
+# drosera device-inventory publisher (lentago/drosera#151): hourly push of the
+# box's redis device inventory to the central Alloy Loki receiver as
+# log_source="device_inventory". drosera owns the script and its env file
+# (installed by drosera's scripts/deploy-device-inventory-publisher.sh into
+# run/device-inventory/); betula carries only the schedule, because this file
+# is the one crontab source that survives update_crontab.sh rebuilds — a line
+# installed with `crontab -` was dropped by every rebuild (dead 2026-07-04→13
+# and 2026-07-17→10-05). The -x guard keeps a box without the publisher quiet.
+17 * * * * [ -x /home/pi/.firewalla/run/device-inventory/publish-device-inventory.sh ] && /home/pi/.firewalla/run/device-inventory/publish-device-inventory.sh >> /home/pi/.firewalla/run/device-inventory/publish.log 2>&1
