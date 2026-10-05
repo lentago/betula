@@ -33,14 +33,15 @@ A log-shipping pipeline that captures DNS queries, connection flows, and ACL blo
 
 ```
 Firewalla Zeek logs (dns/conn/ssl) + acl-audit ──► Fluent Bit (Docker) ──► Grafana Cloud Loki (direct HTTPS push, no LAN relay)
-Firewalla redis device inventory ──► device_inventory_publish.sh (hourly cron) ──► central Alloy :3100 (LAN) ──► Grafana Cloud Loki
+Firewalla redis device inventory ──► device_inventory_publish.sh (hourly cron) ──► Grafana Cloud Loki (direct HTTPS push, no LAN relay)
 ```
 
-The device-inventory collector (#115, moved from drosera) is the one stream
-that still relays through drosera's central Alloy (drosera ADR-0006); whether
-it should push direct like the Zeek streams is drosera#243. Its stream
-contract (`log_source="device_inventory"`, `dev="<name>|<ip>"`, JSON line) is
-an interface drosera's dashboards depend on — see the script header.
+The device-inventory collector (#115, moved from drosera) pushes direct with
+Fluent Bit's credentials from `log_shipping.env`, and sets `cluster` itself.
+It relayed through drosera's central Alloy `:3100` receiver until drosera#243.
+Its stream contract (`log_source="device_inventory"`, `dev="<name>|<ip>"`,
+`cluster`, JSON line) is an interface drosera's dashboards depend on — see the
+script header.
 
 The Loki output is the pipeline's sole output. Any Loki-compatible consumer (Grafana Cloud, a self-hosted Loki, Promtail, Vector) works by swapping the endpoint/creds.
 
