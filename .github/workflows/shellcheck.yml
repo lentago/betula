@@ -22,3 +22,4 @@ jobs:
         scripts/bootstrap.sh
         scripts/fluent_bit_healthcheck.sh
         scripts/rotate_logs.sh
+        scripts/device_inventory_publish.sh

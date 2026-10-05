@@ -30,6 +30,12 @@ deliberately keeps the old name.
 > Grafana Cloud Loki (the live pane owned by [lentago/drosera](https://github.com/lentago/drosera)).
 > The git history before this date documents the Axiom archive path if it needs
 > to be revived as a client later.
+>
+> **Device inventory returned (2026-10, #115):** the redis device-inventory
+> export is back in betula as `scripts/device_inventory_publish.sh`, now
+> shipping to Loki as `log_source="device_inventory"` (via drosera's central
+> Alloy) for drosera's IP→name dashboard joins. drosera ran it from 2026-07-03
+> until this move.
 
 **Destination is a per-client decision.** [ADR-0004](docs/adr/0004-loki-sole-destination.md)
 is scoped to the **Firewalla client** — it records the 2026-07-09 decision to make Loki that
@@ -285,6 +291,7 @@ betula/
 │   ├── start_log_shipping.sh            # Docker bootstrap (post_main.d)
 │   ├── fluent_bit_healthcheck.sh        # Wedged-container restarter (cron)
 │   ├── rotate_logs.sh                   # Daily pipeline-log rotation (cron)
+│   ├── device_inventory_publish.sh      # Hourly redis device inventory → Loki (cron, from the clone)
 │   ├── gitops-sync.sh                   # 5-min poll → fetch → validate → reload
 │   └── bootstrap.sh                     # One-time on-device setup
 ├── cron/
