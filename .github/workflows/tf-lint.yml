@@ -1,0 +1,8 @@
+name: Terraform Lint
+
+on:
+  pull_request:
+
+jobs:
+  tf-lint:
+    uses: lentago/shared-workflows/.github/workflows/tf-lint.yml@v1.2.2
