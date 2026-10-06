@@ -191,11 +191,22 @@ PR workflow + auto-merge arming protocol is fleet-wide; see `~/repos/CLAUDE.md`.
 
 ## CI/CD
 
-- **ShellCheck** (`.github/workflows/shellcheck.yml`): Static analysis on every
-  non-draft PR. Severity: warning+. Required status check.
-- **Claude Code Review** (`.github/workflows/claude-code-review.yml`): Automated
-  review focused on appliance safety, secret handling, dependency creep, and
-  bash correctness. Required status check.
-- **Claude Code** (`.github/workflows/claude.yml`): Triggered by `@claude` in
+Required status checks (enforced by the `.github` meta-repo's Terraform from
+`fleet-ops/required-checks.json`): `gate`, `shellcheck / shellcheck`,
+`docs-check / docs-check`, `tf-lint / tf-lint`. Shared reusables are pinned to
+`lentago/shared-workflows` tags (ADR-0005), never `@main`.
+
+- **ShellCheck** (`.github/workflows/shellcheck.yml`): static analysis on every
+  non-draft PR, severity warning+.
+- **docs-check** (`.github/workflows/docs-check.yml`): relative markdown link
+  resolution on every PR.
+- **Terraform** (`.github/workflows/terraform.yml`): plan on PR (posted as a
+  comment), apply on merge to `main` for `terraform/` (the Axiom datasets, #118);
+  `gate` is its always-on fan-in check.
+- **tf-lint** (`.github/workflows/tf-lint.yml`): `terraform fmt`, `validate`,
+  and `tflint` over `terraform/`.
+- **Review**: CodeRabbit is the org-wide advisory reviewer (never a gate). The
+  old `claude-code-review.yml` stub was retired 2026-10-06 (#123).
+- **Claude Code** (`.github/workflows/claude.yml`): triggered by `@claude` in
   issues/PR comments. Implements changes, creates PRs with auto-merge.
-- **Auto-merge**: PRs merge automatically when ShellCheck and review pass.
+- **Auto-merge**: PRs merge automatically once the required checks pass.
