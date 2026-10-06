@@ -14,3 +14,11 @@ __pycache__/
 # OS junk
 .DS_Store
 Thumbs.db
+
+# Terraform (terraform/): provider cache and any local state. State lives in
+# the S3 backend; the lock file (.terraform.lock.hcl) IS committed.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan

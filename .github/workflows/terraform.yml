@@ -1,0 +1,209 @@
+name: terraform
+
+# Axiom side of betula's archive (datasets, retention) — #118. Plan on every
+# PR, apply on merge to main. Mirrors lentago/drosera's terraform.yml.
+on:
+  # PR trigger is intentionally NOT path-filtered: `gate` is meant to be a
+  # required check, and a required check whose workflow never triggers is held
+  # "Expected" forever (lentago/.github#27). The path filter lives in `changes`.
+  pull_request:
+  push:
+    branches: [main]
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform.yml"
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write # OIDC → AWS for the S3 state backend (plan + apply jobs)
+
+env:
+  # Least-privilege: this repo's S3 state key, the tfstate CMK, and the lock
+  # table only (lentago/solidago#207).
+  AWS_ROLE: arn:aws:iam::365184644049:role/betula-github-actions-terraform
+  AWS_REGION: us-east-1
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      tf: ${{ steps.filter.outputs.tf }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Detect terraform changes
+        id: filter
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "tf=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          changed=$(git diff --name-only "$BASE_SHA" HEAD)
+          if echo "$changed" | grep -qE '^terraform/|^\.github/workflows/terraform\.yml$'; then
+            echo "tf=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tf=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  validate:
+    needs: changes
+    if: needs.changes.outputs.tf == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.14.9"
+          terraform_wrapper: false
+      - name: fmt
+        run: terraform fmt -check -recursive
+      - name: init (no backend)
+        run: terraform init -backend=false -input=false
+      - name: validate
+        run: terraform validate -no-color
+
+  plan:
+    needs: [changes, validate]
+    runs-on: ubuntu-latest
+    # Dependabot PRs can't read repo secrets; a dependency bump never needs a
+    # live plan. Skipped counts as pass for `gate`.
+    if: >-
+      needs.changes.outputs.tf == 'true' &&
+      github.event_name == 'pull_request' &&
+      github.actor != 'dependabot[bot]'
+    defaults:
+      run:
+        working-directory: terraform
+    env:
+      AXIOM_API_TOKEN: ${{ secrets.AXIOM_TF_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Verify Axiom secret
+        run: |
+          if [ -z "${AXIOM_API_TOKEN:-}" ]; then
+            echo "::error::Repository secret AXIOM_TF_API_TOKEN is empty or unset (see terraform/README.md)."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials (OIDC → S3 state)
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ env.AWS_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.14.9"
+          terraform_wrapper: false
+
+      - name: init
+        run: terraform init -input=false
+
+      - name: plan
+        id: plan
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          terraform plan -no-color -input=false -lock=false -out=tfplan 2>&1 | tee plan.txt
+          PLAN_EXIT=${PIPESTATUS[0]}
+          {
+            echo 'plan<<EOF'
+            tail -c 60000 plan.txt
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+          exit "$PLAN_EXIT"
+
+      - name: comment on PR
+        if: always()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PLAN: ${{ steps.plan.outputs.plan }}
+          OUTCOME: ${{ steps.plan.outcome }}
+        with:
+          script: |
+            const plan = process.env.PLAN || '(no plan output captured)';
+            const body = [
+              `### terraform plan (${process.env.OUTCOME})`,
+              '```',
+              plan,
+              '```',
+            ].join('\n');
+            return github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+      - name: Fail if terraform plan failed
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+  apply:
+    needs: [changes, validate]
+    runs-on: ubuntu-latest
+    if: >-
+      needs.changes.outputs.tf == 'true' &&
+      github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Serialize applies so two quick merges can't race on the same state.
+    concurrency:
+      group: terraform-apply
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: terraform
+    env:
+      AXIOM_API_TOKEN: ${{ secrets.AXIOM_TF_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Verify Axiom secret
+        run: |
+          if [ -z "${AXIOM_API_TOKEN:-}" ]; then
+            echo "::error::Repository secret AXIOM_TF_API_TOKEN is empty or unset (see terraform/README.md)."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials (OIDC → S3 state)
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ env.AWS_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.14.9"
+          terraform_wrapper: false
+
+      - name: init
+        run: terraform init -input=false
+
+      - name: apply
+        run: terraform apply -auto-approve -no-color -input=false
+
+  # Single fan-in check for the pipeline: green when validate/plan succeeded or
+  # were skipped (non-terraform PR), red when either failed or was cancelled.
+  gate:
+    needs: [changes, validate, plan]
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Terraform gate
+        run: |
+          echo "changes=${{ needs.changes.result }} validate=${{ needs.validate.result }} plan=${{ needs.plan.result }}"
+          for r in "${{ needs.changes.result }}" "${{ needs.validate.result }}" "${{ needs.plan.result }}"; do
+            case "$r" in
+              failure|cancelled)
+                echo "::error::terraform gate blocked (a required job reported $r)"
+                exit 1 ;;
+            esac
+          done
+          echo "gate passed (success/skipped only)"

@@ -73,6 +73,7 @@ betula/
 │   ├── fluent_bit_healthcheck.sh   # Cron-driven wedged-container restarter
 │   ├── rotate_logs.sh              # Daily pipeline-log rotation
 │   └── device_inventory_publish.sh # Hourly redis device inventory → Loki (runs from the clone)
+├── terraform/                      # Axiom datasets + retention (plan on PR, apply on merge; #118)
 ├── cron/
 │   └── user_crontab                # Log cleanup, healthcheck, log rotation, gitops poll, device inventory
 └── docs/

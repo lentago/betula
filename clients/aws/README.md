@@ -86,8 +86,10 @@ stops while the platform is down. That is expected, not a betula fault.
 
 ## Not yet done (tracked in #74)
 
-- Terraform for the Axiom side (both datasets + tokens) — today they are
-  created by hand in the Axiom UI; `core/axiom` will absorb this along with #12.
+- Terraform for the Axiom **tokens**. The datasets and their retention are
+  now in [`terraform/`](../../terraform/README.md) (#118); `cjp-solidago-ask`
+  is added there when its forwarder ships (solidago#144). Tokens are still
+  created by hand in the Axiom UI (follow-up #119).
 - Deploying the ALB shipper as a Lambda (S3 notification, IAM, packaging) —
   solidago follow-up #108; betula owns only the reusable logic in `alb-logs/`.
 - Deploying the CloudWatch Logs forwarder Lambda (subscription filter on the Ask
