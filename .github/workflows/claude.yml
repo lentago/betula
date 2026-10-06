@@ -29,7 +29,7 @@ jobs:
       issues: write
       id-token: write
       actions: read
-    uses: lentago/shared-workflows/.github/workflows/claude-responder.yml@main
+    uses: lentago/shared-workflows/.github/workflows/claude-responder.yml@v1.2.3
     secrets: inherit
     with:
       allowed_tools: '"Bash(git add:*)" "Bash(git commit:*)" "Bash(git checkout:*)" "Bash(git switch:*)" "Bash(git push:*)" "Bash(git status:*)" "Bash(git diff:*)" "Bash(git log:*)" "Bash(git branch:*)" "Bash(gh pr create:*)" "Bash(gh pr merge:*)" "Bash(gh pr view:*)" "Bash(shellcheck:*)" "Read" "Edit" "Write"'
