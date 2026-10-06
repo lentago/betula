@@ -21,4 +21,4 @@ on:
 
 jobs:
   docs-check:
-    uses: lentago/shared-workflows/.github/workflows/docs-check.yml@main
+    uses: lentago/shared-workflows/.github/workflows/docs-check.yml@v1.2.3
