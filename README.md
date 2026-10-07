@@ -2,7 +2,7 @@
      Regenerate there; do not hand-edit the banner or badge URLs. -->
 <a href="https://lentago.dev"><img src="./assets/banner.svg" alt="betula — Log capture · collectors to long-retention search" width="100%"></a>
 
-[![main](https://img.shields.io/github/check-runs/lentago/betula/main?style=flat-square&labelColor=0e2b1a&color=1b4b2e&label=main)](https://github.com/lentago/betula/actions) [![License](https://img.shields.io/github/license/lentago/betula?style=flat-square&labelColor=0e2b1a&color=1b4b2e)](https://github.com/lentago/betula/blob/main/LICENSE) [![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-1b4b2e?style=flat-square&labelColor=0e2b1a&logo=readthedocs&logoColor=E0A81C)](https://deepwiki.com/lentago/betula)
+[![main](https://img.shields.io/github/check-runs/lentago/betula/main?style=flat-square&labelColor=0e2b1a&color=1b4b2e&label=main)](https://github.com/lentago/betula/actions) [![License](https://img.shields.io/github/license/lentago/betula?style=flat-square&labelColor=0e2b1a&color=1b4b2e)](https://github.com/lentago/betula/blob/main/LICENSE)
 
 ![Axiom](https://img.shields.io/badge/Axiom-1b4b2e?style=flat-square&labelColor=0e2b1a) ![Fluent Bit](https://img.shields.io/badge/Fluent%20Bit-1b4b2e?style=flat-square&labelColor=0e2b1a&logo=fluentbit&logoColor=E0A81C) ![Zeek](https://img.shields.io/badge/Zeek-1b4b2e?style=flat-square&labelColor=0e2b1a) ![Loki](https://img.shields.io/badge/Loki-1b4b2e?style=flat-square&labelColor=0e2b1a&logo=grafanaloki&logoColor=E0A81C)
 
@@ -54,22 +54,6 @@ always a valid choice; changing an existing client's destination requires a matc
 > automated applies; humans own every merge. betula's job in that estate is **capture and
 > archive** — it ships log data off each source into Loki; the live Grafana pane that visualizes
 > it belongs to [lentago/drosera](https://github.com/lentago/drosera).
-
-## 📚 Ask this codebase (DeepWiki)
-
-<a href="https://deepwiki.com/lentago/betula"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki" height="32"></a>
-
-> [DeepWiki](https://deepwiki.com/lentago/betula) maintains an AI-generated wiki over this
-> repository — architecture pages, diagrams, and a Q&A box grounded in the actual code. Every
-> public Lentago Labs repo is indexed ([deepwiki.com/lentago](https://deepwiki.com/lentago));
-> it is the fastest way to orient before reading source. It is AI-generated: trust it to orient
-> you, verify against the code before you act on it.
-
-**Good first questions:**
-
-- How does the GitOps poller on the Firewalla validate a new Fluent Bit config before applying it, and what happens if validation fails?
-- What are the three AWS log emitters in `clients/aws`, and how does each one get its logs into Axiom?
-- Why did betula stop shipping Firewalla logs to Axiom, and what does Grafana Cloud Loki's stream-label contract with drosera look like?
 
 ## 🧭 What this repo demonstrates
 
@@ -514,5 +498,4 @@ See the Authorship note at the top — the code in this repo is co-written with 
 > 🌱 **Lentago Labs** is a pro-bono operations practice for organizations that
 > run on volunteers, donations, and one overworked tech person. Everything here
 > is free to take, and we practice what we publish: our own estate runs this
-> way, in the open. Start at the [org profile](https://github.com/lentago), and
-> read this repo on [DeepWiki](https://deepwiki.com/lentago/betula).
+> way, in the open. Start at the [org profile](https://github.com/lentago).
