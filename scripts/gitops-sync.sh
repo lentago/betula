@@ -82,8 +82,10 @@ dryrun_fluent_bit() {
 # Read one KEY from Fluent Bit's docker-style env file (read, not sourced).
 # Last KEY=value line; strip a trailing CR and one layer of surrounding quotes.
 env_value() {
-  sed -n "s/^${1}=//p" "$LOG_SHIPPING_ENV" 2>/dev/null | tail -1 \
-    | tr -d '\r' | sed -e 's/^["'"'"']//' -e 's/["'"'"']$//'
+  # `|| true`: under set -euo pipefail a missing env file would otherwise make
+  # the assignment in emit_live abort the whole sync; telemetry must never.
+  { sed -n "s/^${1}=//p" "$LOG_SHIPPING_ENV" 2>/dev/null | tail -1 \
+    | tr -d '\r' | sed -e 's/^["'"'"']//' -e 's/["'"'"']$//'; } || true
 }
 
 # emit_live <result> <sha> <previous_sha> <changed_files_count>
