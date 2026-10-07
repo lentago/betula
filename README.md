@@ -176,6 +176,8 @@ Typical deploy wall-clock for a config change: **~2 seconds** (dry-run + file co
 
 **Log:** `/home/pi/.firewalla/config/gitops-sync.log` — timestamped, leveled, rotates at 1 MB to `.log.1`. No-ops are suppressed; expect quiet days. The log is the first place to look when a merge didn't seem to take.
 
+**Live event.** [`scripts/gitops-sync.sh`](scripts/gitops-sync.sh) also reports which commit the device is running. On every tick that ends in a no-op, a deploy, or a rollback, it pushes one small JSON record to Grafana Cloud Loki under `log_source="betula_live"`, carrying the commit SHA and a `result` of `noop`, `applied`, or `rolled_back`. That record is the Firewalla's `live` stage in the fleet's change pipeline, the drosera view that follows a merge from push to running (lentago/drosera#251). A tick that fails before it reaches one of those three outcomes, such as a failed container restart, sends nothing. A failed push logs a WARN and never changes what the sync does. To confirm a record landed, open Explore in Grafana and run `{log_source="betula_live", cluster="lentago"} | json`; the newest line should show the SHA at the top of `main`. To print the record without sending it, run `scripts/gitops-sync.sh --dry-run-live`.
+
 **Secrets stay device-local.** `log_shipping.env` is never touched by sync. If you rotate the Grafana Cloud token, scp the new env file manually (see [§Manual / break-glass deploy](#manual--break-glass-deploy)).
 
 **Break-glass.** `deploy.sh <fw-ip>` from a workstation still works for the rare case where you need to push from a non-`main` branch (e.g., debugging a poller bug that's blocking the loop). See the appendix.
