@@ -6,6 +6,8 @@ Failure rules (issue #113):
   the next tick retries the same run attempts.
 - A rate-limit response records ``backoff_until``; ticks before then exit
   without calling GitHub.
+- A failed ``branches/{default}`` request skips only that repo's
+  ``github_branch_head`` event for the tick (#134).
 - A Loki 400 for out-of-order / too-old entries is logged and dropped: the
   keys are marked seen so the batch isn't retried forever.
 """
@@ -34,7 +36,9 @@ def _iso(epoch):
 
 def repos_for(owner, gh, state, now):
     cached = state.repos.get(owner)
-    if cached and now - cached.get("fetched_at", 0) < REPO_REFRESH_S:
+    # Entries cached before #134 were bare names without a default branch; refetch.
+    if (cached and now - cached.get("fetched_at", 0) < REPO_REFRESH_S
+            and all(isinstance(r, dict) for r in cached["repos"])):
         return cached["repos"]
     repos = gh.list_repos(owner)
     state.repos[owner] = {"fetched_at": now, "repos": repos}
@@ -52,7 +56,8 @@ def collect(cfg, gh, state, now):
     events, new_keys = [], {}
     for entry in cfg.owners:
         owner, cluster = entry["owner"], entry["cluster"]
-        for repo in repos_for(owner, gh, state, now):
+        for repo_obj in repos_for(owner, gh, state, now):
+            repo = repo_obj["full_name"]
             try:
                 runs = gh.list_completed_runs(repo, since_iso)
             except GitHubError as exc:
@@ -71,7 +76,32 @@ def collect(cfg, gh, state, now):
                 events.extend(mapping.job_event(job, run, repo, cluster) for job in jobs)
                 created = mapping.parse_ts(run.get("created_at"))
                 new_keys[key] = int(created.timestamp()) if created else now
+    events.extend(collect_branch_heads(cfg, gh, state, now))
     return events, new_keys
+
+
+def collect_branch_heads(cfg, gh, state, now):
+    """One ``github_branch_head`` event per repo, every tick (not deduplicated).
+
+    A failed branch request skips that repo for this tick only; rate limits
+    still propagate so the tick backs off.
+    """
+    events = []
+    for entry in cfg.owners:
+        owner, cluster = entry["owner"], entry["cluster"]
+        for repo_obj in repos_for(owner, gh, state, now):
+            repo, branch = repo_obj["full_name"], repo_obj.get("default_branch")
+            if not branch:  # empty repo: nothing to report
+                continue
+            try:
+                branch_obj = gh.get_branch(repo, branch)
+            except RateLimited:
+                raise
+            except GitHubError as exc:
+                log.warning("branch head for %s skipped this tick: %s", repo, exc)
+                continue
+            events.append(mapping.branch_head_event(branch_obj, branch, repo, cluster, now))
+    return events
 
 
 def tick(cfg, gh, loki, state, now, dry_run=False, out=None):
@@ -91,12 +121,14 @@ def tick(cfg, gh, loki, state, now, dry_run=False, out=None):
         return FAILED
     state.save_cache()
 
-    runs = sum(1 for e in events if e[0]["stage"] == "run")
+    runs = sum(1 for e in events if e[0].get("stage") == "run")
+    heads = sum(1 for e in events if e[0]["log_source"] == mapping.BRANCH_HEAD)
+    jobs = len(events) - runs - heads
     if dry_run:
         for labels, ts, line in events:
             print(f"{ts} {labels['log_source']} {labels['repo']} {line}", file=out)
-        log.info("dry run: %d run(s), %d job(s); nothing pushed, seen-set unchanged",
-                 runs, len(events) - runs)
+        log.info("dry run: %d run(s), %d job(s), %d branch head(s); nothing pushed, seen-set unchanged",
+                 runs, jobs, heads)
         return OK
 
     if events:
@@ -111,6 +143,6 @@ def tick(cfg, gh, loki, state, now, dry_run=False, out=None):
         state.seen.update(new_keys)
     state.prune_seen(now - cfg.lookback_s)
     state.save_seen()
-    log.info("pushed %d run(s), %d job(s); %d GitHub request(s); seen-set %d",
-             runs, len(events) - runs, gh.requests, len(state.seen))
+    log.info("pushed %d run(s), %d job(s), %d branch head(s); %d GitHub request(s); seen-set %d",
+             runs, jobs, heads, gh.requests, len(state.seen))
     return OK

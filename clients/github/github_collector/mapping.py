@@ -106,3 +106,27 @@ def job_event(job, run, repo, cluster):
         or parse_ts(run.get("created_at"))
     )
     return labels("job", cluster, repo), to_ns(ts), _line(payload)
+
+
+BRANCH_HEAD = "github_branch_head"
+
+
+def branch_head_event(branch_obj, branch, repo, cluster, now):
+    """One repo's default-branch head → ``(labels, ts_ns, line)``, stamped at poll time.
+
+    Unlike run/job events this is a state sample ("the newest head as of
+    now"), so the poll time is the right timestamp. Only three labels
+    (``log_source``, ``cluster``, ``repo``); the rest is in the line.
+    """
+    commit = branch_obj.get("commit") or {}
+    committer = (commit.get("commit") or {}).get("committer") or {}
+    observed = datetime.fromtimestamp(now, tz=timezone.utc)
+    payload = {
+        "branch": branch,
+        "sha": commit.get("sha"),
+        "committed_at": committer.get("date"),
+        "url": commit.get("html_url"),
+        "observed_at": observed.strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    lbls = {"log_source": BRANCH_HEAD, "cluster": cluster, "repo": repo}
+    return lbls, to_ns(observed), _line(payload)

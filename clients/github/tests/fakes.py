@@ -60,10 +60,22 @@ class FakeGitHub:
         self.routes = {}
         self.calls = []
 
-    def set_repos(self, owner, *names, archived=()):
-        repos = [{"full_name": f"{owner}/{n}", "archived": False} for n in names]
-        repos += [{"full_name": f"{owner}/{n}", "archived": True} for n in archived]
+    def set_repos(self, owner, *names, archived=(), default_branches=None):
+        branches = default_branches or {}
+        repos = [{"full_name": f"{owner}/{n}", "archived": False,
+                  "default_branch": branches.get(n, "main")} for n in names]
+        repos += [{"full_name": f"{owner}/{n}", "archived": True, "default_branch": "main"} for n in archived]
         self.routes[f"/orgs/{owner}/repos"] = [repos]
+
+    def set_branch(self, repo, branch="main", sha="deadbeef" * 5, committed="2026-10-06T22:00:00Z"):
+        self.routes[f"/repos/{repo}/branches/{branch}"] = [{
+            "name": branch,
+            "commit": {
+                "sha": sha,
+                "html_url": f"https://github.com/{repo}/commit/{sha}",
+                "commit": {"committer": {"date": committed}},
+            },
+        }]
 
     def set_runs(self, repo, *runs):
         self.routes[f"/repos/{repo}/actions/runs"] = [{"total_count": len(runs), "workflow_runs": list(runs)}]

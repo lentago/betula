@@ -106,14 +106,19 @@ class GitHubClient:
             url = match.group(1) if match else None
 
     def list_repos(self, owner):
-        """Non-archived repos for an org (falls back to the user endpoint on 404)."""
+        """Non-archived repos for an org as ``{"full_name", "default_branch"}`` dicts,
+        sorted by name (falls back to the user endpoint on 404)."""
         try:
             repos = list(self._paginate(f"/orgs/{owner}/repos", {"type": "all"}))
         except GitHubError as exc:
             if exc.status != 404 or isinstance(exc, RateLimited):
                 raise
             repos = list(self._paginate(f"/users/{owner}/repos", {"type": "owner"}))
-        return sorted(r["full_name"] for r in repos if not r.get("archived"))
+        return sorted(
+            ({"full_name": r["full_name"], "default_branch": r.get("default_branch")}
+             for r in repos if not r.get("archived")),
+            key=lambda r: r["full_name"],
+        )
 
     def list_completed_runs(self, full_name, since_iso):
         """Completed runs created at or after ``since_iso`` (ISO-8601, UTC)."""
@@ -129,3 +134,8 @@ class GitHubClient:
         """
         path = f"/repos/{full_name}/actions/runs/{run_id}/attempts/{attempt}/jobs"
         return list(self._paginate(path, {}, key="jobs"))
+
+    def get_branch(self, full_name, branch):
+        """The branch object (``commit.sha`` etc.) for one branch."""
+        data, _ = self._get(f"{self._root}/repos/{full_name}/branches/{urllib.parse.quote(branch, safe='')}")
+        return data

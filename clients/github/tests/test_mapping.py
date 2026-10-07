@@ -99,5 +99,18 @@ class JobPayloadTest(unittest.TestCase):
         self.assertIsNone(json.loads(line)["duration_s"])
 
 
+class BranchHeadPayloadTest(unittest.TestCase):
+    def test_labels_and_line(self):
+        branch = {"commit": {"sha": "f" * 40, "html_url": "https://x/c",
+                             "commit": {"committer": {"date": "2026-10-06T22:00:00Z"}}}}
+        lbls, ts, line = mapping.branch_head_event(branch, "main", "lentago/.github", "lentago", 1791331200)
+        self.assertEqual(lbls, {"log_source": "github_branch_head", "cluster": "lentago", "repo": "lentago/.github"})
+        self.assertEqual(ts, 1791331200 * 1_000_000_000)
+        self.assertEqual(json.loads(line), {
+            "branch": "main", "sha": "f" * 40, "committed_at": "2026-10-06T22:00:00Z",
+            "url": "https://x/c", "observed_at": "2026-10-07T00:00:00Z",
+        })
+
+
 if __name__ == "__main__":
     unittest.main()

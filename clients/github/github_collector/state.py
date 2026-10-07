@@ -4,7 +4,7 @@ Two files, written atomically (temp file + rename):
 
 - ``seen.json``  — ``{"<run_id>:<run_attempt>": <run created_at epoch>}``.
   Only ever advanced after Loki accepted the push.
-- ``cache.json`` — the per-owner repo list with its fetch time, and the
+- ``cache.json`` — the per-owner repo list (name + default branch) with its fetch time, and the
   rate-limit ``backoff_until`` epoch. Safe to delete; it's rebuilt.
 """
 
