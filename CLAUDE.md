@@ -34,6 +34,7 @@ A log-shipping pipeline that captures DNS queries, connection flows, and ACL blo
 ```
 Firewalla Zeek logs (dns/conn/ssl) + acl-audit ──► Fluent Bit (Docker) ──► Grafana Cloud Loki (direct HTTPS push, no LAN relay)
 Firewalla redis device inventory ──► device_inventory_publish.sh (hourly cron) ──► Grafana Cloud Loki (direct HTTPS push, no LAN relay)
+gitops-sync.sh tick (noop / applied / rolled_back) ──► Grafana Cloud Loki as log_source="betula_live" (cluster="lentago", direct HTTPS push)
 ```
 
 The device-inventory collector (#115, moved from drosera) pushes direct with

@@ -9,6 +9,11 @@
 # Firewalla's update_crontab.sh (only if cron/user_crontab changed). Rolls back to the pre-sync SHA on validation
 # failure — the live container keeps running on the last-known-good config.
 #
+# Each tick also emits one change-pipeline `live` event to Grafana Cloud Loki
+# (emit_live): result=noop | applied | rolled_back, carrying the SHA the device
+# runs. Telemetry only — a failed push logs WARN and never alters the sync.
+# Pass --dry-run-live (or DRY_RUN_LIVE=1) to print the payload instead.
+#
 # Modeled on lentago/homeassistant-config scripts/gitops-sync.sh. See issue
 # #45 for the design rationale.
 # =============================================================================
@@ -21,6 +26,15 @@ readonly LOG_FILE="${LIVE_DIR}/gitops-sync.log"
 readonly LOG_MAX_BYTES=1048576
 readonly CONTAINER_NAME="fluent-bit-axiom"
 readonly IMAGE="fluent/fluent-bit:latest"
+readonly LOG_SHIPPING_ENV="${LIVE_DIR}/log_shipping.env"
+
+DRY_RUN_LIVE="${DRY_RUN_LIVE:-}"
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run-live) DRY_RUN_LIVE=1 ;;
+    *) echo "usage: $0 [--dry-run-live]" >&2; exit 1 ;;
+  esac
+done
 
 log() {
   local level="$1"; shift
@@ -65,6 +79,67 @@ dryrun_fluent_bit() {
     > "$err_out" 2>&1
 }
 
+# Read one KEY from Fluent Bit's docker-style env file (read, not sourced).
+# Last KEY=value line; strip a trailing CR and one layer of surrounding quotes.
+env_value() {
+  sed -n "s/^${1}=//p" "$LOG_SHIPPING_ENV" 2>/dev/null | tail -1 \
+    | tr -d '\r' | sed -e 's/^["'"'"']//' -e 's/["'"'"']$//'
+}
+
+# emit_live <result> <sha> <previous_sha> <changed_files_count>
+# Push one change-pipeline `live` event to Grafana Cloud Loki. Contract
+# (lentago/drosera#251): six labels, JSON line payload. Best-effort — always
+# returns 0 so telemetry can never change the sync's behaviour or exit code.
+emit_live() {
+  local result="$1" sha="$2" previous_sha="$3" changed="$4"
+  local payload applied_at ts_ns host user token http_code
+  applied_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  ts_ns=$(date +%s%N)
+
+  if ! payload=$(jq -nc \
+    --arg ts "$ts_ns" --arg sha "$sha" --arg prev "$previous_sha" \
+    --arg result "$result" --argjson changed "$changed" --arg at "$applied_at" '
+    {
+      stream: { log_source: "betula_live", cluster: "lentago", source: "betula",
+                pipeline: "change", stage: "live", repo: "lentago/betula" },
+      values: [ [ $ts, ({ sha: $sha, previous_sha: $prev, repo: "lentago/betula",
+                          surface: "firewalla", result: $result,
+                          changed_files: $changed, applied_at: $at } | tojson) ] ]
+    } | { streams: [.] }' 2>/dev/null); then
+    log WARN "emit_live: could not build payload (jq missing?) — skipping"
+    return 0
+  fi
+
+  if [[ -n "$DRY_RUN_LIVE" ]]; then
+    printf '%s\n' "$payload"
+    return 0
+  fi
+
+  host=$(env_value GRAFANA_CLOUD_LOGS_HOST)
+  user=$(env_value GRAFANA_CLOUD_LOGS_USER)
+  token=$(env_value GRAFANA_CLOUD_LOGS_TOKEN)
+  if [[ -z "$host" || -z "$user" || -z "$token" ]]; then
+    log WARN "emit_live: GRAFANA_CLOUD_LOGS_* not found in ${LOG_SHIPPING_ENV} — skipping"
+    return 0
+  fi
+
+  # Basic auth via a curl config on stdin (-K -) so the token never appears in
+  # the process list. Short timeout, no retries: don't hold the sync lock.
+  if ! http_code=$(printf 'user = "%s:%s"\n' "$user" "$token" \
+    | curl -sS -K - -o /dev/null -w '%{http_code}' --max-time 10 \
+        -X POST "https://${host}/loki/api/v1/push" \
+        -H 'Content-Type: application/json' \
+        --data-binary "$payload" 2>/dev/null); then
+    log WARN "emit_live: push of result=${result} failed (curl error)"
+    return 0
+  fi
+  case "$http_code" in
+    204|200) ;;
+    *) log WARN "emit_live: push of result=${result} returned HTTP ${http_code}" ;;
+  esac
+  return 0
+}
+
 main() {
   rotate_log
 
@@ -95,6 +170,7 @@ main() {
 
   if [[ "$rollback_sha" == "$remote_sha" ]]; then
     # no-op; suppress to keep the log focused on actual deploys
+    emit_live noop "$remote_sha" "$remote_sha" 0
     exit 0
   fi
 
@@ -108,6 +184,9 @@ main() {
 
   local changed_files
   changed_files=$(git diff --name-only "${rollback_sha}..${remote_sha}")
+
+  local changed_count
+  changed_count=$(printf '%s\n' "$changed_files" | grep -c . || true)
 
   git reset --hard "$remote_sha"
 
@@ -148,6 +227,7 @@ main() {
 
   if [[ "$relevant_changes" == false ]]; then
     log INFO "No file in this delta is deployed to live — nothing to apply."
+    emit_live applied "$remote_sha" "$rollback_sha" "$changed_count"
     exit 0
   fi
 
@@ -164,6 +244,7 @@ main() {
       rm -f "$dryrun_log"
       git reset --hard "$rollback_sha"
       log INFO "Rolled back to ${rollback_sha:0:7}. Live container untouched."
+      emit_live rolled_back "$rollback_sha" "$remote_sha" "$changed_count"
       exit 1
     fi
     rm -f "$dryrun_log"
@@ -207,6 +288,7 @@ main() {
   fi
 
   log INFO "Deploy complete at ${remote_sha:0:7}"
+  emit_live applied "$remote_sha" "$rollback_sha" "$changed_count"
 }
 
 # Acquire exclusive lock — silent exit if a prior run is still going

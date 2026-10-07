@@ -176,6 +176,8 @@ Typical deploy wall-clock for a config change: **~2 seconds** (dry-run + file co
 
 **Log:** `/home/pi/.firewalla/config/gitops-sync.log` — timestamped, leveled, rotates at 1 MB to `.log.1`. No-ops are suppressed; expect quiet days. The log is the first place to look when a merge didn't seem to take.
 
+**Live event.** Every tick also pushes one change-pipeline event to Grafana Cloud Loki (`result` = `noop`, `applied`, or `rolled_back`, with the SHA the device runs); a failed push logs a WARN and never affects the sync. Smoke query: `{log_source="betula_live", cluster="lentago"} | json`. Run `scripts/gitops-sync.sh --dry-run-live` to print the payload instead of pushing.
+
 **Secrets stay device-local.** `log_shipping.env` is never touched by sync. If you rotate the Grafana Cloud token, scp the new env file manually (see [§Manual / break-glass deploy](#manual--break-glass-deploy)).
 
 **Break-glass.** `deploy.sh <fw-ip>` from a workstation still works for the rare case where you need to push from a non-`main` branch (e.g., debugging a poller bug that's blocking the loop). See the appendix.
