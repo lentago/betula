@@ -112,8 +112,12 @@ poll time.
 }
 ```
 
-- **Adding a second org is one more `owners` entry.** No code change is
-  needed. Add the org to the PAT's resource owner too, or mint a second PAT.
+- **Adding a second org is one more `owners` entry.** No code change and no
+  second token: a fine-grained PAT with public-repository read access reads
+  any public repository on GitHub, whatever its owner, so the one
+  `BETULA_GITHUB_TOKEN` covers every public org you list. A private repo under
+  another owner would need per-owner credentials, which the collector does not
+  support.
 - `interval` and `lookback` are systemd-style durations (`90s`, `5m`, `24h`,
   `2d`). `deploy.sh` copies `interval` into the timer. `lookback` must be
   longer than `interval`.
