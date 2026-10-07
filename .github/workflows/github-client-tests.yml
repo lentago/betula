@@ -1,0 +1,38 @@
+# ============================================================================
+# GitHub Client Unit Tests
+# ============================================================================
+# Runs the stdlib-only unit suite for the GitHub Actions collector client
+# (clients/github, #113). The suite drives a fake GitHub and a fake Loki, so it
+# needs no tokens and no network.
+#
+# Path-filtered to clients/github/** to stay cheap, so, like
+# aws-client-tests.yml, this must NOT be marked a required status check: a
+# required check whose workflow never triggers on a given PR is held
+# "Expected" forever, deadlocking that PR. Leave it informational/unrequired.
+# ============================================================================
+
+name: GitHub Client Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+    paths:
+      - 'clients/github/**'
+      - '.github/workflows/github-client-tests.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.9 is the floor deploy.sh enforces on the host; 3.12 matches the aws suite.
+        python: ['3.9', '3.12']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Run unit tests (Python ${{ matrix.python }})
+        working-directory: clients/github
+        run: python3 -m unittest discover -s tests

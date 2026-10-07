@@ -73,6 +73,10 @@ betula/
 │   ├── fluent_bit_healthcheck.sh   # Cron-driven wedged-container restarter
 │   ├── rotate_logs.sh              # Daily pipeline-log rotation
 │   └── device_inventory_publish.sh # Hourly redis device inventory → Loki (runs from the clone)
+├── clients/
+│   ├── README.md                   # Index of collector clients
+│   ├── aws/                        # solidago → Axiom emitters (ALB, CloudWatch Logs)
+│   └── github/                     # GitHub Actions runs/jobs → Loki; systemd timer on LXC 105 (#113)
 ├── terraform/                      # Axiom datasets + retention (plan on PR, apply on merge; #118)
 ├── cron/
 │   └── user_crontab                # Log cleanup, healthcheck, log rotation, gitops poll, device inventory
@@ -198,6 +202,10 @@ Required status checks (enforced by the `.github` meta-repo's Terraform from
 
 - **ShellCheck** (`.github/workflows/shellcheck.yml`): static analysis on every
   non-draft PR, severity warning+.
+- **Client tests** (`aws-client-tests.yml`, `github-client-tests.yml`):
+  stdlib `unittest` suites, path-filtered to their client, so informational
+  only — never make them required (a never-triggered required check deadlocks
+  the PR).
 - **docs-check** (`.github/workflows/docs-check.yml`): relative markdown link
   resolution on every PR.
 - **Terraform** (`.github/workflows/terraform.yml`): plan on PR (posted as a
