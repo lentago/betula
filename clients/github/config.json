@@ -1,0 +1,7 @@
+{
+  "owners": [
+    {"owner": "lentago", "cluster": "lentago"}
+  ],
+  "interval": "5m",
+  "lookback": "24h"
+}

@@ -1,0 +1,13 @@
+# Canonical timer — clients/github/deploy.sh substitutes @INTERVAL@ from
+# config.json's "interval" (a systemd-compatible duration such as 5m).
+[Unit]
+Description=betula — GitHub Actions collector every @INTERVAL@
+Documentation=https://github.com/lentago/betula/tree/main/clients/github
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=@INTERVAL@
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,23 @@
+# Canonical unit — installed verbatim by clients/github/deploy.sh. Edit here,
+# not on the host.
+[Unit]
+Description=betula — GitHub Actions collector, one tick (runs/jobs → Grafana Cloud Loki)
+Documentation=https://github.com/lentago/betula/tree/main/clients/github
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=betula-github
+Group=betula-github
+# 0600 root:root; systemd reads it before dropping to the service user.
+EnvironmentFile=/etc/default/betula-github
+Environment=PYTHONPATH=/opt/betula-github PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 -m github_collector --config /etc/betula-github/config.json
+# /var/lib/betula-github (seen-set + repo cache), owned by the service user.
+StateDirectory=betula-github
+StateDirectoryMode=0750
+TimeoutStartSec=10min
+# No mount-namespace hardening (ProtectSystem=, PrivateTmp=, …): those fail
+# with status=226/NAMESPACE in unprivileged LXC guests such as LXC 105.
+NoNewPrivileges=yes

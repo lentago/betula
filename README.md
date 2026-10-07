@@ -268,7 +268,8 @@ betula/
 ├── LICENSE
 ├── env.example                          # Template for credentials
 ├── clients/
-│   └── aws/                             # Second collector client (solidago → Axiom); see clients/aws/README.md
+│   ├── aws/                             # Second collector client (solidago → Axiom); see clients/aws/README.md
+│   └── github/                          # GitHub Actions runs/jobs → Loki (systemd timer); see clients/github/README.md
 ├── fluent-bit/
 │   ├── fluent-bit.conf                  # Main Fluent Bit configuration
 │   └── parsers.conf                     # Zeek log parser definitions
