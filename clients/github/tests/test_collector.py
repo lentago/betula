@@ -116,7 +116,7 @@ class TickTest(unittest.TestCase):
         outcome, state = self.tick(now=NOW + 300)
         self.assertEqual(outcome, collector.OK)
         self.assertEqual(len(self.loki.pushes), 2)
-        lines = [l for l in self.pushed_lines() if l[0] != "github_branch_head"]
+        lines = [line for line in self.pushed_lines() if line[0] != "github_branch_head"]
         self.assertEqual(len(lines), 2)  # the new run attempt + its one job; attempt 1 untouched
         self.assertTrue(all('"run_attempt":2' in line for _, line in lines))
         self.assertIn("/repos/lentago/kalmia/actions/runs/1/attempts/2/jobs", self.gh.paths())
