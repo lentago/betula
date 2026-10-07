@@ -22,25 +22,37 @@ def client(fake):
     return GitHubClient("github_pat_test", transport=fake, clock=lambda: NOW)
 
 
+class BranchTest(unittest.TestCase):
+    def test_get_branch_returns_the_branch_object(self):
+        fake = FakeGitHub()
+        fake.set_branch("lentago/kalmia", "main", sha="abc")
+        self.assertEqual(client(fake).get_branch("lentago/kalmia", "main")["commit"]["sha"], "abc")
+        self.assertEqual(fake.paths(), ["/repos/lentago/kalmia/branches/main"])
+
+
 class RepoEnumerationTest(unittest.TestCase):
     def test_lists_non_archived_repos_sorted(self):
         fake = FakeGitHub()
         fake.set_repos("lentago", "kalmia", "drosera", archived=("old-thing",))
-        self.assertEqual(client(fake).list_repos("lentago"), ["lentago/drosera", "lentago/kalmia"])
+        self.assertEqual(client(fake).list_repos("lentago"), [
+            {"full_name": "lentago/drosera", "default_branch": "main"},
+            {"full_name": "lentago/kalmia", "default_branch": "main"},
+        ])
 
     def test_follows_pagination(self):
         fake = FakeGitHub()
         fake.routes["/orgs/lentago/repos"] = [
-            [{"full_name": "lentago/a", "archived": False}],
-            [{"full_name": "lentago/b", "archived": False}],
+            [{"full_name": "lentago/a", "archived": False, "default_branch": "main"}],
+            [{"full_name": "lentago/b", "archived": False, "default_branch": "trunk"}],
         ]
-        self.assertEqual(client(fake).list_repos("lentago"), ["lentago/a", "lentago/b"])
+        self.assertEqual([r["full_name"] for r in client(fake).list_repos("lentago")], ["lentago/a", "lentago/b"])
         self.assertEqual(len(fake.calls), 2)
 
     def test_falls_back_to_user_endpoint_when_not_an_org(self):
         fake = FakeGitHub()
-        fake.routes["/users/cpitzi/repos"] = [[{"full_name": "cpitzi/dotfiles", "archived": False}]]
-        self.assertEqual(client(fake).list_repos("cpitzi"), ["cpitzi/dotfiles"])
+        fake.routes["/users/cpitzi/repos"] = [[{"full_name": "cpitzi/dotfiles", "archived": False, "default_branch": "master"}]]
+        self.assertEqual(client(fake).list_repos("cpitzi"),
+                         [{"full_name": "cpitzi/dotfiles", "default_branch": "master"}])
         self.assertEqual(fake.paths(), ["/orgs/cpitzi/repos", "/users/cpitzi/repos"])
 
     def test_sends_auth_and_api_version_headers(self):

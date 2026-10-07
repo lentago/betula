@@ -1,6 +1,7 @@
 """Collector tick: window, dedupe, persistence, re-runs, and failure behaviour."""
 
 import io
+import json
 import logging
 import os
 import shutil
@@ -37,6 +38,7 @@ class TickTest(unittest.TestCase):
         self.gh.set_runs(REPO, run(1), run(2, conclusion="failure"))
         self.gh.set_jobs(REPO, 1, 1, job(10, 1), job(11, 1, name="lint"))
         self.gh.set_jobs(REPO, 2, 1, job(20, 2, conclusion="failure"))
+        self.gh.set_branch(REPO, "main", sha="a" * 40, committed="2026-10-06T22:00:00Z")
         self.loki = FakeLoki()
 
     def tick(self, now=NOW, state=None, **kwargs):
@@ -44,6 +46,11 @@ class TickTest(unittest.TestCase):
         gh = GitHubClient("t", transport=self.gh, clock=lambda: now)
         loki = LokiPusher("https://loki", "1", "t", transport=self.loki)
         return collector.tick(self.cfg, gh, loki, state, now, **kwargs), state
+
+    def head_events(self, push_index=-1):
+        body = self.loki.pushes[push_index][2]
+        return [(s["stream"], json.loads(v[1])) for s in body["streams"]
+                if s["stream"]["log_source"] == "github_branch_head" for v in s["values"]]
 
     def pushed_lines(self, push_index=-1):
         body = self.loki.pushes[push_index][2]
@@ -58,6 +65,7 @@ class TickTest(unittest.TestCase):
         kinds = [k for k, _ in self.pushed_lines()]
         self.assertEqual(kinds.count("github_actions_run"), 2)
         self.assertEqual(kinds.count("github_actions_job"), 3)
+        self.assertEqual(kinds.count("github_branch_head"), 1)
         self.assertEqual(set(state.seen), {"1:1", "2:1"})
 
     def test_window_is_created_since_now_minus_lookback(self):
@@ -82,7 +90,7 @@ class TickTest(unittest.TestCase):
         self.assertEqual(outcome, collector.OK)
         self.assertEqual(self.loki.pushes, [])
         self.assertEqual(State(self.dir).seen, {})
-        self.assertEqual(len(out.getvalue().splitlines()), 5)
+        self.assertEqual(len(out.getvalue().splitlines()), 6)
 
     # ── dedupe ──
 
@@ -90,7 +98,8 @@ class TickTest(unittest.TestCase):
         self.tick()
         self.gh.calls.clear()
         self.tick(now=NOW + 300)
-        self.assertEqual(len(self.loki.pushes), 1)  # second tick had nothing new
+        self.assertEqual(len(self.loki.pushes), 2)  # only the branch head repeats
+        self.assertEqual(len(self.pushed_lines()), 1)
         self.assertFalse(any("/attempts/" in p for p in self.gh.paths()))
 
     def test_seen_set_survives_a_restart(self):
@@ -98,7 +107,7 @@ class TickTest(unittest.TestCase):
         fresh = State(self.dir)  # a new process reading the persisted state
         self.assertEqual(set(fresh.seen), {"1:1", "2:1"})
         self.tick(now=NOW + 300, state=fresh)
-        self.assertEqual(len(self.loki.pushes), 1)
+        self.assertEqual(len(self.pushed_lines()), 1)
 
     def test_rerun_emits_new_attempt_with_its_own_jobs(self):
         self.tick()
@@ -107,7 +116,7 @@ class TickTest(unittest.TestCase):
         outcome, state = self.tick(now=NOW + 300)
         self.assertEqual(outcome, collector.OK)
         self.assertEqual(len(self.loki.pushes), 2)
-        lines = self.pushed_lines()
+        lines = [l for l in self.pushed_lines() if l[0] != "github_branch_head"]
         self.assertEqual(len(lines), 2)  # the new run attempt + its one job; attempt 1 untouched
         self.assertTrue(all('"run_attempt":2' in line for _, line in lines))
         self.assertIn("/repos/lentago/kalmia/actions/runs/1/attempts/2/jobs", self.gh.paths())
@@ -140,6 +149,70 @@ class TickTest(unittest.TestCase):
         clusters = {s["stream"]["cluster"] for s in self.loki.pushes[0][2]["streams"]}
         self.assertEqual(clusters, {"lentago", "pitzilabs"})
 
+    # ── branch heads (#134) ──
+
+    def test_branch_head_event_has_exact_labels_and_fields(self):
+        self.tick()
+        [(stream, line)] = self.head_events()
+        self.assertEqual(stream, {"log_source": "github_branch_head", "cluster": "lentago", "repo": REPO})
+        self.assertEqual(line, {
+            "branch": "main",
+            "sha": "a" * 40,
+            "committed_at": "2026-10-06T22:00:00Z",
+            "url": f"https://github.com/{REPO}/commit/{'a' * 40}",
+            "observed_at": "2026-10-07T00:00:00Z",
+        })
+
+    def test_one_branch_head_per_repo_every_tick_even_when_unchanged(self):
+        self.gh.set_repos("lentago", "kalmia", "drosera")
+        self.gh.set_runs("lentago/drosera")
+        self.gh.set_branch("lentago/drosera", "main", sha="b" * 40)
+        self.tick()
+        self.tick(now=NOW + 300)
+        for index in (0, 1):
+            repos = sorted(s["repo"] for s, _ in self.head_events(index))
+            self.assertEqual(repos, ["lentago/drosera", "lentago/kalmia"])
+        self.assertEqual(self.head_events(1)[0][1]["observed_at"], "2026-10-07T00:05:00Z")
+        self.assertEqual(self.gh.paths().count("/repos/lentago/kalmia/branches/main"), 2)
+
+    def test_default_branch_comes_from_the_repository_object(self):
+        self.gh.set_repos("lentago", "kalmia", default_branches={"kalmia": "trunk"})
+        self.gh.set_branch(REPO, "trunk", sha="c" * 40)
+        self.tick()
+        self.assertIn("/repos/lentago/kalmia/branches/trunk", self.gh.paths())
+        self.assertNotIn("/repos/lentago/kalmia/branches/main", self.gh.paths())
+        [(_, line)] = self.head_events()
+        self.assertEqual((line["branch"], line["sha"]), ("trunk", "c" * 40))
+
+    def test_failed_branch_request_skips_only_that_repo(self):
+        self.gh.set_repos("lentago", "kalmia", "drosera")
+        self.gh.set_runs("lentago/drosera")
+        self.gh.set_branch("lentago/drosera", "main", sha="b" * 40)
+        self.gh.routes["/repos/lentago/kalmia/branches/main"] = (502, {}, "bad gateway")
+        outcome, state = self.tick()
+        self.assertEqual(outcome, collector.OK)
+        self.assertEqual([s["repo"] for s, _ in self.head_events()], ["lentago/drosera"])
+        self.assertEqual(set(state.seen), {"1:1", "2:1"})  # runs still pushed and recorded
+
+    def test_branch_heads_push_alone_when_there_are_no_new_runs(self):
+        self.tick()
+        self.tick(now=NOW + 300)
+        self.assertEqual(len(self.head_events()), 1)
+        self.assertEqual(len(self.pushed_lines()), 1)
+
+    def test_dry_run_prints_branch_heads_without_pushing(self):
+        out = io.StringIO()
+        self.tick(dry_run=True, out=out)
+        self.assertIn("github_branch_head lentago/kalmia", out.getvalue())
+        self.assertEqual(self.loki.pushes, [])
+
+    def test_pre_134_cache_of_bare_names_is_refreshed(self):
+        state = State(self.dir)
+        state.repos["lentago"] = {"fetched_at": NOW, "repos": [REPO]}
+        state.save_cache()
+        self.tick()
+        self.assertEqual(len(self.head_events()), 1)
+
     # ── failure behaviour ──
 
     def test_github_failure_skips_tick_without_advancing(self):
@@ -148,6 +221,12 @@ class TickTest(unittest.TestCase):
         self.assertEqual(outcome, collector.FAILED)
         self.assertEqual(self.loki.pushes, [])
         self.assertEqual(State(self.dir).seen, {})
+
+    def test_branch_rate_limit_backs_off(self):
+        self.gh.routes["/repos/lentago/kalmia/branches/main"] = (429, {"retry-after": "30"}, "")
+        outcome, _ = self.tick()
+        self.assertEqual(outcome, collector.BACKOFF)
+        self.assertEqual(self.loki.pushes, [])
 
     def test_missing_repo_404_invalidates_repo_cache(self):
         self.gh.routes["/repos/lentago/kalmia/actions/runs"] = (404, {}, "Not Found")
@@ -162,7 +241,7 @@ class TickTest(unittest.TestCase):
         self.assertEqual(State(self.dir).seen, {})
         outcome, state = self.tick(now=NOW + 300)  # next tick retries the same attempts
         self.assertEqual(outcome, collector.OK)
-        self.assertEqual(len(self.pushed_lines()), 5)
+        self.assertEqual(len(self.pushed_lines()), 6)
         self.assertEqual(set(state.seen), {"1:1", "2:1"})
 
     def test_loki_out_of_order_400_is_dropped_and_not_retried(self):
@@ -171,7 +250,7 @@ class TickTest(unittest.TestCase):
         self.assertEqual(outcome, collector.OK)
         self.assertEqual(set(State(self.dir).seen), {"1:1", "2:1"})
         self.tick(now=NOW + 300)
-        self.assertEqual(len(self.loki.pushes), 1)
+        self.assertEqual(len(self.pushed_lines()), 1)  # retry tick carries only the head
 
     def test_rate_limit_backs_off_until_reset(self):
         self.gh.routes["/repos/lentago/kalmia/actions/runs"] = (

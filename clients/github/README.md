@@ -32,9 +32,12 @@ Each timer tick runs `python3 -m github_collector` once:
    `/actions/runs/{id}/attempts/{attempt}/jobs`. The plain `/jobs` endpoint
    defaults to `filter=latest` and would credit a re-run's jobs to the wrong
    attempt.
-5. Sends every run and job event to Loki in **one** request, sorted by
-   timestamp within each stream.
-6. Adds the pushed keys to the seen-set only after Loki returns 2xx, then
+5. Fetches `GET /repos/{repo}/branches/{default_branch}` for every repo (the
+   default branch comes from the repository object in step 1) and builds one
+   `github_branch_head` event each. See [Branch head](#branch-head).
+6. Sends every run, job and branch-head event to Loki in **one** request,
+   sorted by timestamp within each stream.
+7. Adds the pushed keys to the seen-set only after Loki returns 2xx, then
    prunes keys for runs older than the lookback.
 
 **Why a lookback window instead of a high-water mark:** a `created>=<mark>`
@@ -58,6 +61,7 @@ and deduplicating on `(run_id, run_attempt)` catches both.
 |---|---|
 | GitHub API error (5xx, network, 404) | Tick skipped and the seen-set is unchanged, so the next tick retries. A 404 on a repo's runs also drops the cached repo list. Exit 1, so the unit shows failed. |
 | GitHub rate limit (403/429 with `x-ratelimit-remaining: 0`, `retry-after`, or a secondary-limit message) | `backoff_until` is saved to `cache.json`. Ticks before that time exit 0 without calling GitHub. |
+| Branch request fails (5xx, network, 404) | That repo's `github_branch_head` event is skipped for the tick; the other repos and the runs/jobs pass are unaffected. A rate limit on this call still backs off the whole tick. |
 | Loki error (5xx, 401/403, 429, other 400s, network) | Tick skipped and the seen-set is unchanged. Exit 1. |
 | Loki 400 for out-of-order or too-old entries | Logged and dropped. The keys are marked seen so the batch isn't retried forever (Loki still ingests the valid entries in the batch). |
 
@@ -99,6 +103,33 @@ poll time.
 `runner_labels`, `self_hosted` (true when `runner_labels` contains
 `self-hosted`), `html_url`. Skipped jobs are emitted too.
 
+### Branch head
+
+`github_branch_head` answers "what is the newest commit on each repo's default
+branch?", which the Actions feed cannot: in repos with path-filtered push
+workflows a docs-only merge produces no run
+([drosera#251](https://github.com/lentago/drosera/issues/251), ADR-0010). It
+backs the "stuck" alert.
+
+**Stream labels:** only `log_source="github_branch_head"`, `cluster` (the
+owner's cluster) and `repo` (`owner/name`). It does not carry the
+`source`/`pipeline`/`stage` labels of the run and job events.
+
+**Line:** `branch` (the repo's default branch), `sha` (full commit SHA),
+`committed_at` (the commit's committer date, RFC 3339), `url` (the commit's
+`html_url`), `observed_at` (tick time, RFC 3339).
+
+One line per repo per tick, pushed even when the head is unchanged: consumers
+read "the newest head as of now". It is not deduplicated and does not touch the
+seen-set. It is stamped at the tick time, since it is a state sample rather than
+an event. `--dry-run` prints it like the other events. It costs one extra GitHub
+request per repo per tick (144/hour for twelve repos). Empty repos (no default
+branch) are skipped.
+
+```logql
+{log_source="github_branch_head", cluster="lentago"} | json
+```
+
 ## Config
 
 [`config.json`](config.json) lives in git and is installed verbatim to
@@ -137,8 +168,9 @@ by `deploy.sh`), never in git.
 3. Pick an expiry and generate the token (`github_pat_…`). It becomes
    `BETULA_GITHUB_TOKEN`.
 
-The limit is 5,000 requests/hour. Expect about 350/hour at a 5-minute interval
-(one runs call per repo per tick, plus one jobs call per new run attempt). If a
+The limit is 5,000 requests/hour. Expect about 500/hour at a 5-minute interval
+(one runs call and one branch call per repo per tick, plus one jobs call per
+new run attempt). If a
 private repo ever needs coverage, switch to selected repositories and grant
 **Actions: read** and **Metadata: read** on just that repo.
 
@@ -218,7 +250,7 @@ cd clients/github && python3 -m unittest discover -s tests -v
 
 The tests run against an in-process fake GitHub and fake Loki
 ([`tests/fakes.py`](tests/fakes.py)), with no tokens and no network. They cover
-repo enumeration and pagination, the window and dedupe logic (including
+repo enumeration and pagination, branch-head events, the window and dedupe logic (including
 restarts and re-runs), attempt-scoped job fetch, payload mapping, batching, and
 each failure case in the table above. CI runs them in
 [`github-client-tests.yml`](../../.github/workflows/github-client-tests.yml).
