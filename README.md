@@ -462,7 +462,7 @@ After that, the cron poller (already in `user_crontab`) will start syncing every
 
 ## Contributing
 
-This was built for one specific on-prem network (Firewalla Gold SE → Grafana Cloud Loki). PRs welcome for:
+This was built for one specific on-prem network, meaning the machines in our own building (Firewalla Gold SE → Grafana Cloud Loki). PRs welcome for:
 
 - Support for other Firewalla models (Purple SE, Gold Pro)
 - Additional log sources (http.log, files.log)
@@ -473,7 +473,7 @@ This was built for one specific on-prem network (Firewalla Gold SE → Grafana C
 
 - **[lentago/drosera](https://github.com/lentago/drosera)** — Grafana Cloud + Alloy observability stack for the on-prem network behind the Firewalla (the Loki consumer)
 - **[lentago/kalmia](https://github.com/lentago/kalmia)** — Workstation and guest provisioning for the same on-prem estate
-- **[lentago/solidago](https://github.com/lentago/solidago)** — the Terraform AWS platform — same everything-as-code philosophy
+- **[lentago/solidago](https://github.com/lentago/solidago)** — the Terraform AWS platform — same approach: everything is code, every change a pull request
 
 ## License
 
