@@ -1,6 +1,6 @@
 # Contributing
 
-This is a personal project that ships Firewalla Zeek IDS logs and network telemetry to [Axiom](https://axiom.co/) via Fluent Bit. It runs in my home lab and doubles as a portfolio piece — so stability and clarity matter.
+This repo ships Firewalla Zeek IDS logs and network telemetry off-device via Fluent Bit (Grafana Cloud Loki for the Firewalla; the AWS client ships to [Axiom](https://axiom.co/)). It runs on our on-prem estate and is published as a working exhibit — so stability and clarity matter.
 
 ## Reporting Issues
 
