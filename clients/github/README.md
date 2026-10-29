@@ -209,7 +209,7 @@ installs the package to `/opt/betula-github/`, the config to
 [`systemd/`](systemd/) units. Then it enables the timer and runs one tick
 synchronously. The first tick backfills the whole lookback window, roughly 300
 GitHub requests and a minute or two. To ship a code or config change, re-run
-the script. If the guest has no `python3` ≥ 3.9, the script stops; add the
+the script. If the guest has no `python3` ≥ 3.10, the script stops; add the
 package in kalmia rather than installing it by hand.
 
 ## How you know it worked

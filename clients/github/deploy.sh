@@ -47,11 +47,11 @@ UNIT_DIR="/etc/systemd/system"
 if [[ ${EUID} -eq 0 ]]; then SUDO=""; else command -v sudo >/dev/null || fail "Run as root, or install sudo."; SUDO="sudo"; fi
 command -v systemctl >/dev/null || fail "systemd is required."
 
-# python3 ≥ 3.9 is the only runtime dependency (stdlib only). If the guest
+# python3 ≥ 3.10 is the only runtime dependency (stdlib only). If the guest
 # lacks it, codify the package in kalmia — don't apt-get it by hand here.
 [[ -x /usr/bin/python3 ]] || fail "/usr/bin/python3 not found — add python3 to LXC 105's kalmia definition."
-/usr/bin/python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' \
-  || fail "python3 is older than 3.9 ($(/usr/bin/python3 --version 2>&1))."
+/usr/bin/python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))' \
+  || fail "python3 is older than 3.10 ($(/usr/bin/python3 --version 2>&1))."
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKG_SRC="${SCRIPT_DIR}/github_collector"
