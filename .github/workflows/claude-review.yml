@@ -1,0 +1,123 @@
+# ============================================================================
+# Claude Code — Automated PR Review (advisory)
+# ============================================================================
+# Thin wrapper around lentago/shared-workflows/claude-review.yml, per
+# lentago/.github ADR-0013. This is copied from repo-template's: other repos
+# copy this file and replace only the review_prompt.
+#
+# - Runs when a PR is opened or marked ready for review, and again when it is
+#   labelled `re-review` (Haiku) or `review:sonnet` (Sonnet). It does NOT run on
+#   every push: it shares the fleet's Claude subscription with the bullpen.
+# - Advisory, never a required status check (shared-workflows ADR-0003). The
+#   gate is the arming rule: don't arm until a review has posted and every
+#   finding is triaged on the PR (shared-workflows CLAUDE.md, Auto-merge
+#   arming). A "could not complete" soft-fail comment is not a review —
+#   label `re-review`.
+# - After a labelled run, `clear-label` removes the label so adding it again
+#   triggers again.
+# - A PR that adds or changes THIS file is not reviewed by it: the Claude Code
+#   action skips unless the workflow is identical to the default branch's copy,
+#   and the reusable workflow (v1.5.0+) posts a "not a review" notice instead.
+#   Review such PRs locally and post the result as "Review (Haiku, local)"
+#   (ADR-0013 Decision 2).
+# - Dependabot PRs are skipped: Dependabot runs don't receive Actions secrets,
+#   so the required token would fail the call. Review a bump locally if it
+#   warrants one.
+# - Drafts are skipped (by the reusable workflow) and keep their trigger label
+#   until they are ready.
+# ============================================================================
+
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, labeled]
+
+jobs:
+  review:
+    if: >-
+      github.actor != 'dependabot[bot]' &&
+      github.event.pull_request.draft == false &&
+      (github.event.action != 'labeled' ||
+       github.event.label.name == 're-review' ||
+       github.event.label.name == 'review:sonnet')
+    # One review at a time per PR: a re-label during a running review queues
+    # behind it instead of posting a duplicate.
+    concurrency:
+      group: claude-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    uses: lentago/shared-workflows/.github/workflows/claude-review.yml@v1.5.0
+    secrets: inherit
+    with:
+      model: ${{ github.event.label.name == 'review:sonnet' && 'sonnet' || 'haiku' }}
+      review_prompt: |
+        This repository is lentago/betula, the Lentago Labs log capture layer:
+        per-source collectors that ship to Grafana Cloud Loki. The first is a
+        Fluent Bit + Bash pipeline on a Firewalla Gold SE appliance, updated
+        by an on-device GitOps poller within 5 minutes of merge to main; the
+        others are stdlib-only Python clients under clients/ and Terraform
+        under terraform/ (Axiom datasets, applied on merge). Focus your review
+        on:
+
+        - **Bash correctness and style**: scripts use `#!/usr/bin/env bash`
+          and `set -euo pipefail`, bracketed log prefixes such as
+          `[log-shipping]`, early precondition checks, and exit 1 on error.
+          Look for quoting bugs, unset variables, bad conditionals, and
+          non-portable syntax. Cron-invoked scripts that touch docker must
+          use `sudo docker`.
+        - **Live-apply and appliance safety**: a merged change reaches a
+          production network appliance unattended. Flag anything that could
+          break connectivity, exceed the ~50 MB RAM budget, fill the tmpfs,
+          or put persistent files outside `/home/pi/.firewalla/config/`.
+          Changes to `scripts/gitops-sync.sh` can stop the deploy loop, and
+          `deploy.sh` runs over SSH, so scrutinise missing error handling or
+          destructive steps. The crontab must only be merged through
+          Firewalla's `update_crontab.sh` as pi, never raw `crontab`.
+        - **Fluent Bit config and the Loki contract**: in `fluent-bit/*.conf`,
+          check valid INI, unique input tags, and `Retry_Limit False` on every
+          OUTPUT. The stream labels (`job`, `cluster`, `log_source`) are a
+          contract with drosera's Grafana queries; flag any change, and any
+          high-cardinality field (IP, domain) promoted to a label. The
+          `device_inventory` stream shape is also depended on by drosera.
+        - **Secrets and credentials**: `GRAFANA_CLOUD_LOGS_*` and any Axiom or
+          AWS credentials must come from the environment or `.env`, never be
+          hardcoded or logged, and `.env` must stay gitignored. Check that
+          the workflows and the Terraform don't widen token scope or expose
+          secrets to untrusted input.
+        - **Dependencies**: the Firewalla has only bash, docker, curl,
+          redis-cli, ssh, git, and flock, so flag any other tool. The Python
+          clients must stay stdlib-only, with tests under `unittest` that run
+          without cloud credentials (boto3 injectable and lazily imported).
+        - **Terraform and CI**: `terraform/` changes are applied on merge, so
+          check dataset names and retention for accidental destructive
+          changes. Workflows must pin shared-workflows to a semver tag, never
+          `@main`, and the path-filtered client test workflows must not
+          become required checks.
+
+  clear-label:
+    needs: review
+    if: >-
+      always() && github.event.action == 'labeled' &&
+      github.event.pull_request.draft == false &&
+      (github.event.label.name == 're-review' || github.event.label.name == 'review:sonnet')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Remove the trigger label so it can be added again
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          LABEL: ${{ github.event.label.name }}
+        # REST, not `gh pr edit`: the GraphQL path can trip on PR project
+        # fields with GITHUB_TOKEN, and a label left behind would make the
+        # next re-add a no-op (no `labeled` event).
+        run: |
+          enc=$(jq -rn --arg l "$LABEL" '$l|@uri')
+          gh api --method DELETE "repos/$REPO/issues/$PR/labels/$enc" >/dev/null
