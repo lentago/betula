@@ -1,4 +1,4 @@
-"""Minimal GitHub REST client: repo enumeration, completed runs, attempt jobs.
+"""Minimal GitHub REST client: repo enumeration, completed and active runs, attempt jobs.
 
 The HTTP transport is injectable so tests drive it with a fake GitHub — no
 token, no network. Every failure surfaces as GitHubError (or its RateLimited
@@ -14,6 +14,11 @@ import urllib.request
 
 API_ROOT = "https://api.github.com"
 PER_PAGE = 100
+# Run statuses that can hold a job waiting for a runner. A run turns
+# in_progress as soon as any job starts, so a self-hosted job queued behind
+# hosted ones sits in an in_progress run. `waiting` (environment approval) is
+# not a missing runner and is left out (drosera#292).
+ACTIVE_RUN_STATUSES = ("queued", "in_progress")
 _LINK_NEXT_RE = re.compile(r'<([^>]+)>;\s*rel="next"')
 
 
@@ -124,6 +129,19 @@ class GitHubClient:
         """Completed runs created at or after ``since_iso`` (ISO-8601, UTC)."""
         params = {"status": "completed", "created": f">={since_iso}"}
         return list(self._paginate(f"/repos/{full_name}/actions/runs", params, key="workflow_runs"))
+
+    def list_active_runs(self, full_name):
+        """Runs in any of ``ACTIVE_RUN_STATUSES``, deduplicated by id and sorted.
+
+        One listing per status; a run that moves from queued to in_progress
+        between the two calls is kept once.
+        """
+        runs = {}
+        for status in ACTIVE_RUN_STATUSES:
+            path = f"/repos/{full_name}/actions/runs"
+            for run in self._paginate(path, {"status": status}, key="workflow_runs"):
+                runs[run["id"]] = run
+        return [runs[run_id] for run_id in sorted(runs)]
 
     def list_attempt_jobs(self, full_name, run_id, attempt):
         """Jobs of one specific run attempt.

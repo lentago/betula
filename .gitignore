@@ -3,6 +3,9 @@
 *.env
 log_shipping.env
 
+# Host-local GitHub collector entries (private repo names) — never commit
+queue_watch.local.json
+
 # Temp files
 /tmp/
 *.log

@@ -7,7 +7,8 @@ API = "https://api.github.com"
 
 
 def run(run_id, repo="lentago/kalmia", attempt=1, created="2026-10-06T10:00:00Z",
-        started="2026-10-06T10:00:05Z", updated="2026-10-06T10:03:05Z", conclusion="success"):
+        started="2026-10-06T10:00:05Z", updated="2026-10-06T10:03:05Z", conclusion="success",
+        status="completed"):
     return {
         "id": run_id,
         "name": "CI",
@@ -18,7 +19,7 @@ def run(run_id, repo="lentago/kalmia", attempt=1, created="2026-10-06T10:00:00Z"
         "head_branch": "main",
         "head_sha": "abc123",
         "actor": {"login": "cpitzi"},
-        "status": "completed",
+        "status": status,
         "conclusion": conclusion,
         "created_at": created,
         "run_started_at": started,
@@ -30,13 +31,14 @@ def run(run_id, repo="lentago/kalmia", attempt=1, created="2026-10-06T10:00:00Z"
 
 def job(job_id, run_id, attempt=1, name="build", conclusion="success",
         created="2026-10-06T10:00:06Z", started="2026-10-06T10:00:16Z",
-        completed="2026-10-06T10:02:16Z", labels=("ubuntu-latest",)):
+        completed="2026-10-06T10:02:16Z", labels=("ubuntu-latest",), status="completed"):
     return {
         "id": job_id,
         "run_id": run_id,
         "run_attempt": attempt,
         "workflow_name": "CI",
         "name": name,
+        "status": status,
         "conclusion": conclusion,
         "created_at": created,
         "started_at": started,
@@ -54,6 +56,9 @@ class FakeGitHub:
     ``routes[path]`` is a list of pages (each a JSON-able object), or a
     ``(status, headers, body)`` tuple for an error response. Pages after the
     first are linked with a ``Link: rel="next"`` header like the real API.
+    ``routes[(path, status)]`` takes precedence for a request whose
+    ``status=`` query matches, so active-run listings can differ from the
+    completed-run listing on the same path.
     """
 
     def __init__(self):
@@ -80,6 +85,10 @@ class FakeGitHub:
     def set_runs(self, repo, *runs):
         self.routes[f"/repos/{repo}/actions/runs"] = [{"total_count": len(runs), "workflow_runs": list(runs)}]
 
+    def set_active_runs(self, repo, status, *runs):
+        path = f"/repos/{repo}/actions/runs"
+        self.routes[(path, status)] = [{"total_count": len(runs), "workflow_runs": list(runs)}]
+
     def set_jobs(self, repo, run_id, attempt, *jobs):
         path = f"/repos/{repo}/actions/runs/{run_id}/attempts/{attempt}/jobs"
         self.routes[path] = [{"total_count": len(jobs), "jobs": list(jobs)}]
@@ -91,7 +100,7 @@ class FakeGitHub:
         self.calls.append((url, headers))
         parts = urllib.parse.urlsplit(url)
         query = dict(urllib.parse.parse_qsl(parts.query))
-        route = self.routes.get(parts.path)
+        route = self.routes.get((parts.path, query.get("status")), self.routes.get(parts.path))
         if route is None:
             return 404, {}, json.dumps({"message": "Not Found"})
         if isinstance(route, tuple):

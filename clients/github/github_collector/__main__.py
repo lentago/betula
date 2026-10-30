@@ -31,8 +31,9 @@ def main(argv=None):
         cfg = Config.load(args.config)
         if args.check_config:
             owners = ", ".join(f"{o['owner']}→{o['cluster']}" for o in cfg.owners)
-            log.info("config OK: owners [%s], interval %ss, lookback %ss",
-                     owners, cfg.interval_s, cfg.lookback_s)
+            watched = ", ".join(f"{w['repo']}→{w['cluster']}" for w in cfg.queue_watch)
+            log.info("config OK: owners [%s], queue_watch [%s], interval %ss, lookback %ss",
+                     owners, watched, cfg.interval_s, cfg.lookback_s)
             return 0
         secrets = load_secrets()
     except ConfigError as exc:

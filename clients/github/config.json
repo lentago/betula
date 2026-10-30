@@ -2,6 +2,10 @@
   "owners": [
     {"owner": "lentago", "cluster": "lentago"}
   ],
+  "queue_watch": [
+    {"repo": "lentago/kalmia", "cluster": "lentago"},
+    {"repo": "lentago/claytonia", "cluster": "lentago"}
+  ],
   "interval": "5m",
   "lookback": "24h"
 }

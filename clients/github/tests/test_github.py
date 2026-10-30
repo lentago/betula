@@ -83,6 +83,18 @@ class RunsAndJobsTest(unittest.TestCase):
         self.assertEqual(fake.paths(), ["/repos/lentago/kalmia/actions/runs/7/attempts/2/jobs"])
 
 
+class ActiveRunsTest(unittest.TestCase):
+    def test_lists_queued_and_in_progress_once_each_deduplicated(self):
+        fake = FakeGitHub()
+        fake.set_active_runs("lentago/kalmia", "queued", run(3, status="queued"), run(1, status="queued"))
+        # Run 1 moved to in_progress between the two calls; it is kept once.
+        fake.set_active_runs("lentago/kalmia", "in_progress", run(1, status="in_progress"), run(2, status="in_progress"))
+        runs = client(fake).list_active_runs("lentago/kalmia")
+        self.assertEqual([r["id"] for r in runs], [1, 2, 3])
+        statuses = [dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(u).query))["status"] for u, _ in fake.calls]
+        self.assertEqual(statuses, ["queued", "in_progress"])
+
+
 class FailureTest(unittest.TestCase):
     def test_server_error_raises_github_error(self):
         fake = FakeGitHub()
