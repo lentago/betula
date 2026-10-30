@@ -42,6 +42,8 @@ class ConfigTest(unittest.TestCase):
             {"owners": [{"owner": "a", "cluster": "a"}], "queue_watch": {"repo": "a/b", "cluster": "a"}},
             {"owners": [{"owner": "a", "cluster": "a"}], "queue_watch": ["a/b"]},
             {"owners": [{"owner": "a", "cluster": "a"}], "queue_watch": [{"repo": "kalmia", "cluster": "a"}]},
+            {"owners": [{"owner": "a", "cluster": "a"}], "queue_watch": [{"repo": "lentago/..", "cluster": "a"}]},
+            {"owners": [{"owner": "a", "cluster": "a"}], "queue_watch": [{"repo": "lentago/.", "cluster": "a"}]},
             {"owners": [{"owner": "a", "cluster": "a"}], "queue_watch": [{"repo": "a/b"}]},
             {"owners": [{"owner": "a", "cluster": "a"}],
              "queue_watch": [{"repo": "a/b", "cluster": "a"}, {"repo": "A/B", "cluster": "a"}]},

@@ -26,8 +26,9 @@ LOCAL_QUEUE_WATCH = "queue_watch.local.json"
 _CLUSTER_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,62}")
 # A GitHub login: alphanumerics and single hyphens.
 _OWNER_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})")
-# owner/name, as GitHub spells a repository's full_name.
-_REPO_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}")
+# owner/name, as GitHub spells a repository's full_name. GitHub refuses "." and
+# ".." as names, and they would walk the /repos/{owner}/{name} request path.
+_REPO_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/(?!\.\.?$)[A-Za-z0-9._-]{1,100}")
 # Durations are systemd-compatible ("5m", "24h") so the deploy script can drop
 # `interval` straight into the timer unit.
 _DURATION_RE = re.compile(r"([1-9][0-9]*)([smhd])")
