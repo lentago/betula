@@ -8,6 +8,8 @@ Failure rules (issue #113):
   without calling GitHub.
 - A failed ``branches/{default}`` request skips only that repo's
   ``github_branch_head`` event for the tick (#134).
+- A failed queued-jobs request skips only that ``queue_watch`` repo's
+  ``github_actions_queued`` events for the tick (drosera#292).
 - A Loki 400 for out-of-order / too-old entries is logged and dropped: the
   keys are marked seen so the batch isn't retried forever.
 """
@@ -77,6 +79,7 @@ def collect(cfg, gh, state, now):
                 created = mapping.parse_ts(run.get("created_at"))
                 new_keys[key] = int(created.timestamp()) if created else now
     events.extend(collect_branch_heads(cfg, gh, state, now))
+    events.extend(collect_queued_jobs(cfg, gh, now))
     return events, new_keys
 
 
@@ -104,6 +107,31 @@ def collect_branch_heads(cfg, gh, state, now):
     return events
 
 
+def collect_queued_jobs(cfg, gh, now):
+    """One ``github_actions_queued`` event per queued job in each ``queue_watch``
+    repo, every tick (not deduplicated); nothing when nothing is queued.
+
+    A failed request skips that repo for this tick only; rate limits still
+    propagate so the tick backs off.
+    """
+    events = []
+    for entry in cfg.queue_watch:
+        repo, cluster = entry["repo"], entry["cluster"]
+        try:
+            repo_events = []
+            for run in gh.list_active_runs(repo):
+                jobs = gh.list_attempt_jobs(repo, run["id"], run.get("run_attempt", 1))
+                repo_events.extend(mapping.queued_job_event(job, run, repo, cluster, now)
+                                   for job in jobs if job.get("status") == "queued")
+        except RateLimited:
+            raise
+        except GitHubError as exc:
+            log.warning("queued jobs for %s skipped this tick: %s", repo, exc)
+            continue
+        events.extend(repo_events)
+    return events
+
+
 def tick(cfg, gh, loki, state, now, dry_run=False, out=None):
     if state.backoff_until > now:
         log.warning("rate-limit backoff until %s; skipping tick", _iso(state.backoff_until))
@@ -123,12 +151,13 @@ def tick(cfg, gh, loki, state, now, dry_run=False, out=None):
 
     runs = sum(1 for e in events if e[0].get("stage") == "run")
     heads = sum(1 for e in events if e[0]["log_source"] == mapping.BRANCH_HEAD)
-    jobs = len(events) - runs - heads
+    queued = sum(1 for e in events if e[0]["log_source"] == mapping.QUEUED)
+    jobs = len(events) - runs - heads - queued
     if dry_run:
         for labels, ts, line in events:
             print(f"{ts} {labels['log_source']} {labels['repo']} {line}", file=out)
-        log.info("dry run: %d run(s), %d job(s), %d branch head(s); nothing pushed, seen-set unchanged",
-                 runs, jobs, heads)
+        log.info("dry run: %d run(s), %d job(s), %d branch head(s), %d queued job(s); "
+                 "nothing pushed, seen-set unchanged", runs, jobs, heads, queued)
         return OK
 
     if events:
@@ -143,6 +172,7 @@ def tick(cfg, gh, loki, state, now, dry_run=False, out=None):
         state.seen.update(new_keys)
     state.prune_seen(now - cfg.lookback_s)
     state.save_seen()
-    log.info("pushed %d run(s), %d job(s), %d branch head(s); %d GitHub request(s); seen-set %d",
-             runs, jobs, heads, gh.requests, len(state.seen))
+    log.info("pushed %d run(s), %d job(s), %d branch head(s), %d queued job(s); "
+             "%d GitHub request(s); seen-set %d",
+             runs, jobs, heads, queued, gh.requests, len(state.seen))
     return OK

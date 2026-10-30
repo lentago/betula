@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -17,6 +18,8 @@ class ConfigTest(unittest.TestCase):
     def test_committed_config_is_valid(self):
         cfg = Config.load(os.path.join(HERE, "config.json"), env={})
         self.assertEqual(cfg.owners, [{"owner": "lentago", "cluster": "lentago"}])
+        self.assertEqual(cfg.queue_watch, [{"repo": "lentago/kalmia", "cluster": "lentago"},
+                                           {"repo": "lentago/claytonia", "cluster": "lentago"}])
         self.assertEqual((cfg.interval_s, cfg.lookback_s), (300, 86400))
         self.assertEqual(cfg.state_dir, "/var/lib/betula-github")
 
@@ -24,6 +27,7 @@ class ConfigTest(unittest.TestCase):
         cfg = Config.from_dict({"owners": [{"owner": "lentago", "cluster": "lentago"}]},
                                env={"STATE_DIRECTORY": "/tmp/x"})
         self.assertEqual((cfg.interval_s, cfg.lookback_s, cfg.state_dir), (300, 86400, "/tmp/x"))
+        self.assertEqual(cfg.queue_watch, [])
 
     def test_rejects_bad_entries(self):
         bad = [
@@ -35,10 +39,48 @@ class ConfigTest(unittest.TestCase):
             {"owners": [{"owner": "a", "cluster": "a"}, {"owner": "A", "cluster": "b"}]},
             {"owners": [{"owner": "a", "cluster": "a"}], "interval": "5 minutes"},
             {"owners": [{"owner": "a", "cluster": "a"}], "interval": "1h", "lookback": "30m"},
+            {"owners": [{"owner": "a", "cluster": "a"}], "queue_watch": {"repo": "a/b", "cluster": "a"}},
+            {"owners": [{"owner": "a", "cluster": "a"}], "queue_watch": ["a/b"]},
+            {"owners": [{"owner": "a", "cluster": "a"}], "queue_watch": [{"repo": "kalmia", "cluster": "a"}]},
+            {"owners": [{"owner": "a", "cluster": "a"}], "queue_watch": [{"repo": "a/b"}]},
+            {"owners": [{"owner": "a", "cluster": "a"}],
+             "queue_watch": [{"repo": "a/b", "cluster": "a"}, {"repo": "A/B", "cluster": "a"}]},
         ]
         for raw in bad:
             with self.subTest(raw=raw), self.assertRaises(ConfigError):
                 Config.from_dict(raw, env={})
+
+    def write_config(self, config, local=None):
+        directory = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, directory)
+        path = os.path.join(directory, "config.json")
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(config, fh)
+        if local is not None:
+            with open(os.path.join(directory, "queue_watch.local.json"), "w", encoding="utf-8") as fh:
+                fh.write(local if isinstance(local, str) else json.dumps(local))
+        return path
+
+    def test_local_queue_watch_is_appended_to_the_committed_list(self):
+        path = self.write_config(
+            {"owners": [{"owner": "a", "cluster": "a"}], "queue_watch": [{"repo": "a/b", "cluster": "a"}]},
+            local=[{"repo": "someone/private", "cluster": "someone"}],
+        )
+        self.assertEqual(Config.load(path, env={}).queue_watch, [
+            {"repo": "a/b", "cluster": "a"}, {"repo": "someone/private", "cluster": "someone"},
+        ])
+
+    def test_local_queue_watch_works_without_a_committed_list(self):
+        path = self.write_config({"owners": [{"owner": "a", "cluster": "a"}]},
+                                 local=[{"repo": "someone/private", "cluster": "someone"}])
+        self.assertEqual(Config.load(path, env={}).queue_watch, [{"repo": "someone/private", "cluster": "someone"}])
+
+    def test_bad_local_queue_watch_is_a_config_error(self):
+        committed = {"owners": [{"owner": "a", "cluster": "a"}], "queue_watch": [{"repo": "a/b", "cluster": "a"}]}
+        for local in ("{not json", {"repo": "x/y", "cluster": "x"}, [{"repo": "a/b", "cluster": "a"}],
+                      [{"repo": "x", "cluster": "x"}]):
+            with self.subTest(local=local), self.assertRaises(ConfigError):
+                Config.load(self.write_config(committed, local=local), env={})
 
     def test_unreadable_config(self):
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:

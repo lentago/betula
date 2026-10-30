@@ -272,5 +272,148 @@ class TickTest(unittest.TestCase):
         self.assertEqual(set(state.seen), {"1:1"})
 
 
+class QueuedJobsTest(unittest.TestCase):
+    """github_actions_queued (drosera#292): queued jobs in the queue_watch repos."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dir)
+        logging.disable(logging.CRITICAL)
+        self.addCleanup(logging.disable, logging.NOTSET)
+        self.cfg = Config.from_dict(
+            {"owners": [{"owner": "lentago", "cluster": "lentago"}],
+             "queue_watch": [{"repo": REPO, "cluster": "lentago"}]},
+            env={"STATE_DIRECTORY": self.dir},
+        )
+        self.gh = FakeGitHub()
+        self.gh.set_repos("lentago", "kalmia", "drosera")
+        for repo in (REPO, "lentago/drosera"):
+            self.gh.set_runs(repo)
+            self.gh.set_branch(repo)
+        # The terraform shape: hosted jobs ran, the self-hosted apply is waiting,
+        # so the run itself already reports in_progress.
+        self.gh.set_active_runs(REPO, "queued")
+        self.gh.set_active_runs(REPO, "in_progress", run(7, status="in_progress", conclusion=None))
+        self.gh.set_jobs(REPO, 7, 1,
+                         job(70, 7, name="validate"),
+                         job(71, 7, name="apply", status="queued", conclusion=None,
+                             created="2026-10-06T23:40:00Z", started=None, completed=None,
+                             labels=("self-hosted", "lan")))
+        self.loki = FakeLoki()
+
+    def tick(self, now=NOW, **kwargs):
+        gh = GitHubClient("t", transport=self.gh, clock=lambda: now)
+        loki = LokiPusher("https://loki", "1", "t", transport=self.loki)
+        return collector.tick(self.cfg, gh, loki, State(self.dir), now, **kwargs)
+
+    def queued_events(self, push_index=-1):
+        body = self.loki.pushes[push_index][2]
+        return [(s["stream"], int(v[0]), json.loads(v[1])) for s in body["streams"]
+                if s["stream"]["log_source"] == "github_actions_queued" for v in s["values"]]
+
+    def run_listings(self):
+        """(path, status=) of every runs listing the tick made."""
+        parts = [urllib.parse.urlsplit(u) for u, _ in self.gh.calls]
+        return [(p.path, dict(urllib.parse.parse_qsl(p.query)).get("status"))
+                for p in parts if p.path.endswith("/actions/runs")]
+
+    def test_queued_job_in_an_in_progress_run_has_exact_labels_and_fields(self):
+        self.assertEqual(self.tick(), collector.OK)
+        [(stream, ts, line)] = self.queued_events()
+        self.assertEqual(stream, {"log_source": "github_actions_queued", "cluster": "lentago", "repo": REPO})
+        self.assertEqual(ts, NOW * 1_000_000_000)
+        self.assertEqual(line, {
+            "repo": REPO,
+            "workflow": "CI",
+            "run_id": 7,
+            "run_attempt": 1,
+            "job_id": 71,
+            "job_name": "apply",
+            "status": "queued",
+            "runner_labels": ["self-hosted", "lan"],
+            "self_hosted": True,
+            "queued_at": "2026-10-06T23:40:00Z",
+            "observed_at": "2026-10-07T00:00:00Z",
+            "age_s": 1200,
+            "html_url": "https://github.com/lentago/kalmia/actions/runs/7/job/71",
+        })
+
+    def test_lists_queued_and_in_progress_runs_but_not_waiting(self):
+        self.tick()
+        statuses = [status for path, status in self.run_listings() if path == f"/repos/{REPO}/actions/runs"]
+        self.assertEqual(sorted(statuses), ["completed", "in_progress", "queued"])
+
+    def test_queued_run_with_hosted_job_is_emitted_too(self):
+        self.gh.set_active_runs(REPO, "queued", run(8, status="queued", conclusion=None))
+        self.gh.set_jobs(REPO, 8, 1, job(80, 8, status="queued", conclusion=None, created="2026-10-06T23:59:00Z",
+                                         started=None, completed=None))
+        self.tick()
+        lines = sorted((line["job_id"], line["self_hosted"], line["age_s"]) for _, _, line in self.queued_events())
+        self.assertEqual(lines, [(71, True, 1200), (80, False, 60)])
+
+    def test_only_queued_jobs_are_emitted(self):
+        self.gh.set_jobs(REPO, 7, 1,
+                         job(70, 7, name="validate"),
+                         job(71, 7, name="apply", status="in_progress", conclusion=None, completed=None),
+                         job(72, 7, name="deploy", status="waiting", conclusion=None, completed=None))
+        self.tick()
+        self.assertEqual(self.queued_events(), [])
+
+    def test_nothing_queued_emits_nothing(self):
+        self.gh.set_active_runs(REPO, "in_progress")
+        self.tick()
+        self.assertEqual(self.queued_events(), [])
+        self.assertNotIn(f"/repos/{REPO}/actions/runs/7/attempts/1/jobs", self.gh.paths())
+
+    def test_repeats_every_tick_with_a_growing_age_and_leaves_the_seen_set_alone(self):
+        self.tick()
+        self.tick(now=NOW + 300)
+        self.assertEqual([line["age_s"] for _, _, line in self.queued_events(0)], [1200])
+        self.assertEqual([line["age_s"] for _, _, line in self.queued_events(1)], [1500])
+        self.assertEqual(State(self.dir).seen, {})
+
+    def test_repos_outside_queue_watch_are_not_sampled(self):
+        self.tick()
+        sampled = {path for path, status in self.run_listings() if status != "completed"}
+        self.assertEqual(sampled, {f"/repos/{REPO}/actions/runs"})
+        self.assertEqual({s["repo"] for s, _, _ in self.queued_events()}, {REPO})
+
+    def test_watched_repo_outside_owners_uses_its_own_cluster(self):
+        self.cfg.queue_watch.append({"repo": "pitzilabs/site", "cluster": "pitzilabs"})
+        self.gh.set_active_runs("pitzilabs/site", "queued", run(9, repo="pitzilabs/site", status="queued"))
+        self.gh.set_active_runs("pitzilabs/site", "in_progress")
+        self.gh.set_jobs("pitzilabs/site", 9, 1, job(90, 9, status="queued", created="2026-10-06T23:55:00Z"))
+        self.tick()
+        clusters = {s["repo"]: s["cluster"] for s, _, _ in self.queued_events()}
+        self.assertEqual(clusters, {REPO: "lentago", "pitzilabs/site": "pitzilabs"})
+        self.assertNotIn("/orgs/pitzilabs/repos", self.gh.paths())
+
+    def test_failed_request_skips_only_that_repo(self):
+        self.cfg.queue_watch.append({"repo": "lentago/drosera", "cluster": "lentago"})
+        self.gh.set_active_runs("lentago/drosera", "queued")
+        self.gh.set_active_runs("lentago/drosera", "in_progress", run(5, repo="lentago/drosera", status="in_progress"))
+        self.gh.routes["/repos/lentago/drosera/actions/runs/5/attempts/1/jobs"] = (502, {}, "bad gateway")
+        self.assertEqual(self.tick(), collector.OK)
+        self.assertEqual({s["repo"] for s, _, _ in self.queued_events()}, {REPO})
+        heads = [s for s in self.loki.pushes[0][2]["streams"] if s["stream"]["log_source"] == "github_branch_head"]
+        self.assertEqual(len(heads), 2)  # the other passes are unaffected
+
+    def test_unreadable_repo_404_skips_only_that_repo(self):
+        self.cfg.queue_watch.insert(0, {"repo": "lentago/gone", "cluster": "lentago"})
+        self.assertEqual(self.tick(), collector.OK)
+        self.assertEqual({s["repo"] for s, _, _ in self.queued_events()}, {REPO})
+
+    def test_rate_limit_backs_off(self):
+        self.gh.routes[(f"/repos/{REPO}/actions/runs", "in_progress")] = (429, {"retry-after": "30"}, "")
+        self.assertEqual(self.tick(), collector.BACKOFF)
+        self.assertEqual(self.loki.pushes, [])
+
+    def test_dry_run_prints_queued_jobs_without_pushing(self):
+        out = io.StringIO()
+        self.tick(dry_run=True, out=out)
+        self.assertIn(f"github_actions_queued {REPO}", out.getvalue())
+        self.assertEqual(self.loki.pushes, [])
+
+
 if __name__ == "__main__":
     unittest.main()

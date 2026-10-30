@@ -13,6 +13,9 @@ set -euo pipefail
 #                                        @INTERVAL@ from config.json)
 # Secrets go to /etc/default/betula-github (0600 root:root). State (seen-set,
 # repo cache) lives in /var/lib/betula-github, created by StateDirectory=.
+# /etc/betula-github/queue_watch.local.json, if present, is host-local (for
+# repo names that stay out of git) and is never written here; it is validated
+# with the installed config before the first tick.
 #
 # Required environment:
 #   BETULA_GITHUB_TOKEN       fine-grained PAT, owner lentago, public repos, read-only
@@ -88,6 +91,10 @@ ${SUDO} rm -rf "${APP_DIR}/github_collector"   # drop modules removed upstream
 ${SUDO} install -d -m 0755 "${APP_DIR}/github_collector" "${CONF_DIR}"
 ${SUDO} install -m 0644 "${PKG_SRC}"/*.py "${APP_DIR}/github_collector/"
 ${SUDO} install -m 0644 "${CFG_SRC}" "${CONF_DIR}/config.json"
+# Again against the installed copy, so a host-local queue_watch.local.json is
+# checked too.
+${SUDO} env PYTHONPATH="${APP_DIR}" /usr/bin/python3 -B -m github_collector --config "${CONF_DIR}/config.json" --check-config \
+  || fail "${CONF_DIR}/config.json (with any queue_watch.local.json) failed validation."
 
 # ── Secrets (0600 root:root; systemd reads it as root) ──
 info "Writing ${ENV_FILE} (0600, holds both tokens)..."

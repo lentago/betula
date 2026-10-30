@@ -130,3 +130,36 @@ def branch_head_event(branch_obj, branch, repo, cluster, now):
     }
     lbls = {"log_source": BRANCH_HEAD, "cluster": cluster, "repo": repo}
     return lbls, to_ns(observed), _line(payload)
+
+
+QUEUED = "github_actions_queued"
+
+
+def queued_job_event(job, run, repo, cluster, now):
+    """One job still waiting for a runner → ``(labels, ts_ns, line)``, stamped at poll time.
+
+    A state sample like the branch head: emitted every tick the job stays
+    queued, never deduplicated. ``queued_at`` is the job's ``created_at``:
+    GitHub creates a job only once its ``needs`` resolve, so that is when it
+    started waiting. Contract agreed with drosera's alert rule (drosera#292).
+    """
+    runner_labels = list(job.get("labels") or [])
+    observed = datetime.fromtimestamp(now, tz=timezone.utc)
+    queued = parse_ts(job.get("created_at"))
+    payload = {
+        "repo": repo,
+        "workflow": job.get("workflow_name") or run.get("name"),
+        "run_id": run["id"],
+        "run_attempt": job.get("run_attempt") or run.get("run_attempt", 1),
+        "job_id": job["id"],
+        "job_name": job.get("name"),
+        "status": job.get("status"),
+        "runner_labels": runner_labels,
+        "self_hosted": "self-hosted" in runner_labels,
+        "queued_at": job.get("created_at"),
+        "observed_at": observed.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "age_s": int((observed - queued).total_seconds()) if queued else None,
+        "html_url": job.get("html_url"),
+    }
+    lbls = {"log_source": QUEUED, "cluster": cluster, "repo": repo}
+    return lbls, to_ns(observed), _line(payload)

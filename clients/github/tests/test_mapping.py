@@ -112,5 +112,28 @@ class BranchHeadPayloadTest(unittest.TestCase):
         })
 
 
+class QueuedJobPayloadTest(unittest.TestCase):
+    def test_labels_line_and_poll_time_stamp(self):
+        queued = job(71, 7, name="apply", status="queued", conclusion=None, created="2026-10-06T23:45:00Z",
+                     started=None, completed=None, labels=("self-hosted", "lan"))
+        lbls, ts, line = mapping.queued_job_event(queued, run(7, status="in_progress"), "lentago/kalmia",
+                                                  "lentago", 1791331200)
+        self.assertEqual(lbls, {"log_source": "github_actions_queued", "cluster": "lentago", "repo": "lentago/kalmia"})
+        self.assertEqual(ts, 1791331200 * 1_000_000_000)
+        payload = json.loads(line)
+        self.assertEqual(list(payload), [
+            "repo", "workflow", "run_id", "run_attempt", "job_id", "job_name", "status", "runner_labels",
+            "self_hosted", "queued_at", "observed_at", "age_s", "html_url",
+        ])
+        self.assertEqual((payload["status"], payload["self_hosted"], payload["age_s"]), ("queued", True, 900))
+        self.assertEqual(payload["observed_at"], "2026-10-07T00:00:00Z")
+
+    def test_hosted_job_is_not_self_hosted_and_missing_created_at_has_no_age(self):
+        queued = job(80, 8, status="queued", created=None, labels=("ubuntu-latest",))
+        _, _, line = mapping.queued_job_event(queued, run(8, status="queued"), "lentago/kalmia", "lentago", 1791331200)
+        payload = json.loads(line)
+        self.assertEqual((payload["self_hosted"], payload["age_s"], payload["queued_at"]), (False, None, None))
+
+
 if __name__ == "__main__":
     unittest.main()
