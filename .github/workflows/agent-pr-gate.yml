@@ -1,0 +1,34 @@
+# ============================================================================
+# agent-pr-gate — hold the bullpen's pull requests for a human approval
+# ============================================================================
+# Thin wrapper around lentago/shared-workflows/agent-pr-gate.yml.
+#
+# A pull request the bullpen's runner App authored passes only once a person
+# with write access approves its current head, or when cr-automerge armed it
+# under a routine rule (lentago/.github ADR-0014). Every other pull request
+# passes at once.
+#
+# Deliberately NOT path-filtered: this is built to serve as a required status
+# check (lentago/.github#289), and a required check whose workflow never
+# triggers is held "Expected" forever. Keep the trigger list as it is: the
+# review events are what turn an approval into a green check.
+#
+# Limit until lentago/shared-workflows#97: the runner App can add a workflow
+# that reports a passing check under this name, so the gate stops a merge the
+# App attempts by mistake, not one it is trying to force.
+# ============================================================================
+
+name: agent-pr-gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review, auto_merge_enabled]
+  pull_request_review:
+    types: [submitted, dismissed]
+
+jobs:
+  agent-pr-gate:
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: lentago/shared-workflows/.github/workflows/agent-pr-gate.yml@v1.6.0
