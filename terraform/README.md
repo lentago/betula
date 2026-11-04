@@ -63,6 +63,12 @@ bootstrap token the provider authenticates with stays hand-managed (see
   `rotation_grace_period` (48h by default). A plan showing `update in-place`
   on a token is therefore a **rotation**: merge it only with the consumer
   handoff ready. Adopting a live token must plan as `import` with `0 to change`.
+- **CI enforces it.** The token rotation guard in
+  `.github/workflows/terraform.yml` fails the PR plan, and the apply on
+  `main`, when the plan would update or delete any `axiom_token`. That also
+  catches drift: a token edited in the Axiom UI blocks the next apply instead
+  of being silently regenerated. Imports and new tokens pass. There is no
+  override yet; the first planned rotation (#119 step 3) adds one.
 - **`prevent_destroy` on every token.** Removing a token revokes it at once,
   with no grace period.
 - **Handoff:** consumers will read regenerated values from this state (#119

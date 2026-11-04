@@ -9,7 +9,9 @@
 # breaks after that. So a plan that shows `update in-place` on a token is a
 # rotation, never a tidy-up: merge one only as a planned rotation with its
 # consumer handoff ready (terraform/README.md § Tokens). Adoption must plan as
-# `import` with `0 to change`.
+# `import` with `0 to change`. CI enforces this: the token rotation guard in
+# .github/workflows/terraform.yml fails plan and apply on any token update or
+# delete.
 #
 # prevent_destroy: removing a token revokes it at once, with no grace period.
 #
