@@ -78,7 +78,7 @@ betula/
 │   ├── README.md                   # Index of collector clients
 │   ├── aws/                        # solidago → Axiom emitters (ALB, CloudWatch Logs)
 │   └── github/                     # GitHub Actions runs/jobs → Loki; systemd timer on LXC 105 (#113)
-├── terraform/                      # Axiom datasets + retention (plan on PR, apply on merge; #118)
+├── terraform/                      # Axiom datasets + retention, and the consumer API tokens (plan on PR, apply on merge; #118, #119)
 ├── cron/
 │   └── user_crontab                # Log cleanup, healthcheck, log rotation, gitops poll, device inventory
 └── docs/
@@ -191,6 +191,17 @@ without `bootstrap.sh`). Steps:
 - **Cron + docker on Firewalla needs `sudo`** — the `pi` user is in the docker group via PAM at login, but cron sessions don't inherit it (this bit us in #48). Any new script invoked from `user_crontab` that touches docker must use `sudo docker`, not bare `docker`.
 - **Retry_Limit on every fluent-bit OUTPUT is `False`** — finite retries with a long peer outage silently stop the output forever (#43). On-disk buffering bounds the backlog; leave the limit unbounded.
 - **Changes to `scripts/gitops-sync.sh` itself need extra care** — a bug in the poller can either stop the loop or break future deploys. The `scripts/gitops-sync.sh|scripts/bootstrap.sh` case branch in the file classifier exists specifically so a script-only PR doesn't trigger a fluent-bit dry-run + restart. When changing the script, the safe rollout is: scp the new version to the on-device clone out-of-band, then merge the PR — that way the running poller picks up the fix immediately instead of needing one more cycle.
+- **The Axiom tokens in `terraform/tokens.tf` are live credentials other repos hold.**
+  - **Any change regenerates a token.** That covers name, description, expiry or
+    capabilities. The old value lapses after 48h, so a token change is a
+    planned rotation, never a tidy-up.
+  - **How a rotation works:** it needs the `token-rotation` label. Consumers
+    read the new value from the `axiom_tokens` output in this state, and each
+    must apply within the window.
+  - **Bootstrap token:** `AXIOM_TF_API_TOKEN` is hand-managed. It must hold
+    every capability the managed tokens hold, because Axiom lets a token grant
+    only what it has.
+  - **Details:** `terraform/README.md` § Tokens, including the runbook.
 
 PR workflow + auto-merge arming protocol is fleet-wide; see `~/repos/CLAUDE.md`.
 
@@ -210,8 +221,15 @@ Required status checks (enforced by the `.github` meta-repo's Terraform from
 - **docs-check** (`.github/workflows/docs-check.yml`): relative markdown link
   resolution on every PR.
 - **Terraform** (`.github/workflows/terraform.yml`): plan on PR (posted as a
-  comment), apply on merge to `main` for `terraform/` (the Axiom datasets, #118);
-  `gate` is its always-on fan-in check.
+  comment), apply on merge to `main` for `terraform/`: the Axiom datasets (#118)
+  and the three consumer API tokens (#119). `gate` is its always-on fan-in
+  check.
+  - **Token rotation guard:** both jobs run `.github/scripts/token-guard.sh`
+    over the saved plan.
+    - It fails any token delete or replace.
+    - It fails any token update unless the PR carries the `token-rotation`
+      label, last applied by a User account.
+    - Its cases run in `validate` (`token-guard_test.sh`).
 - **tf-lint** (`.github/workflows/tf-lint.yml`): `terraform fmt`, `validate`,
   and `tflint` over `terraform/`.
 - **Review**: CodeRabbit is the org-wide advisory reviewer (never a gate). The
