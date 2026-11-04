@@ -44,7 +44,7 @@ jobs:
             echo "tf=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           changed=$(git diff --name-only "$BASE_SHA" HEAD)
-          if echo "$changed" | grep -qE '^terraform/|^\.github/workflows/terraform\.yml$|^\.github/scripts/token-guard\.sh$'; then
+          if echo "$changed" | grep -qE '^terraform/|^\.github/workflows/terraform\.yml$|^\.github/scripts/token-guard(_test)?\.sh$'; then
             echo "tf=true" >> "$GITHUB_OUTPUT"
           else
             echo "tf=false" >> "$GITHUB_OUTPUT"
@@ -69,6 +69,8 @@ jobs:
         run: terraform init -backend=false -input=false
       - name: validate
         run: terraform validate -no-color
+      - name: token guard tests
+        run: ../.github/scripts/token-guard_test.sh
 
   plan:
     needs: [changes, validate]

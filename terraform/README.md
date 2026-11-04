@@ -79,6 +79,12 @@ bootstrap token the provider authenticates with stays hand-managed (see
   the operator's account, so a User-applied label shows that a human account
   declared the rotation, and it keeps the runner App from declaring one for
   itself. The authorization is the rotation's release on its issue.
+- **What the guard defends against.** It catches *accidental* rotations:
+  drift, or a capability edit nobody recognised as a rotation. It cannot stop
+  a PR that edits the guard or the workflow, because a PR run uses the PR's
+  own copy of both. Changes to CI are covered by review before arming, and a
+  runner-App PR also needs a human approval (lentago/.github ADR-0014).
+  `.github/scripts/token-guard_test.sh` runs the guard's cases in CI.
 - **`prevent_destroy` on every token.** Removing a token revokes it at once,
   with no grace period.
 - **Handoff:** consumers read token values from this state (#119, option A,

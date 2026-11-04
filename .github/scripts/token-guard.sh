@@ -12,9 +12,17 @@
 #   - Any token delete (or replace) → fail, always. No label covers it.
 #   - Token updates only            → pass only if the PR carries the
 #     token-rotation label and its most recent `labeled` event came from a
-#     User account, not a Bot. The label records that a human account declared
-#     a planned rotation. It is not an approval: the authorization is the
-#     release of that rotation on its issue (terraform/README.md § Tokens).
+#     User account, not a Bot. That keeps the runner App from declaring a
+#     rotation itself. It proves nothing more: a session acting under the
+#     operator's account is a User too. The label records intent and is not an
+#     approval. The authorization is the release of that rotation on its issue
+#     (terraform/README.md § Tokens).
+#
+# Threat model: this catches ACCIDENTAL rotations (drift, or a capability edit
+# not recognised as a rotation). It cannot stop a PR that edits this script or
+# the workflow, since a pull_request run uses the PR's own copy of both. Changes
+# to CI go through review before arming, and a runner-App PR also needs a human
+# approval (.github ADR-0014).
 #
 # Usage: token-guard.sh <plan.json> <pr-number|"">
 #   An empty PR number (no PR found for the commit) fails any token update.
