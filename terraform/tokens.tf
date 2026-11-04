@@ -1,6 +1,8 @@
 # Axiom API tokens that betula's archive plane issues to consumers in other
-# repos (#119). Adopted from live state with `import` blocks at their exact
-# attributes: the first apply is a pure import with no changes.
+# repos (#119). Adopted from live state by an exact import (#153). The import
+# blocks were removed once applied (#119 step 3): a rotation changes a
+# token's ID, so a kept block would name a dead ID. Consumers read the
+# values from outputs.tf.
 #
 # ROTATION GUARD: in provider 1.6.x, ANY difference in name, description,
 # expires_at, dataset_capabilities or org_capabilities makes the apply
@@ -9,9 +11,10 @@
 # breaks after that. So a plan that shows `update in-place` on a token is a
 # rotation, never a tidy-up: merge one only as a planned rotation with its
 # consumer handoff ready (terraform/README.md § Tokens). Adoption must plan as
-# `import` with `0 to change`. CI enforces this: the token rotation guard in
-# .github/workflows/terraform.yml fails plan and apply on any token update or
-# delete.
+# `import` with `0 to change`. CI enforces this: the token rotation guard
+# (.github/scripts/token-guard.sh) fails plan and apply on any token delete,
+# and on any token update unless the PR carries the token-rotation label from
+# a human account.
 #
 # prevent_destroy: removing a token revokes it at once, with no grace period.
 #
@@ -20,11 +23,6 @@
 
 # --- Ingest: solidago ECS container logs via FireLens ------------------------
 # Consumer: solidago Secrets Manager `…-axiom-ingest-header`.
-import {
-  to = axiom_token.solidago_ecs_ingest
-  id = "ef289421464f0254c71a9941a8e5b2f2c2721fc29b9ab2f7a8cb5b481a7a8719"
-}
-
 resource "axiom_token" "solidago_ecs_ingest" {
   name = "solidago-ecs-ingest"
 
@@ -39,11 +37,6 @@ resource "axiom_token" "solidago_ecs_ingest" {
 
 # --- Ingest: solidago ALB access logs via the alb-logs shipper ---------------
 # Consumer: the clients/aws/alb-logs shipper deployed from lentago/solidago.
-import {
-  to = axiom_token.solidago_alb_ingest
-  id = "a887a0dbb04f8001373ee7c14ef7a9952c13038a44cec357b0b22eaf7341a1d9"
-}
-
 resource "axiom_token" "solidago_alb_ingest" {
   name = "cjp-solidago-alb"
 
@@ -57,20 +50,15 @@ resource "axiom_token" "solidago_alb_ingest" {
 }
 
 # --- Query: drosera's "Solidago Axiom" Grafana datasource --------------------
-# Consumer: lentago/drosera TF_VAR_axiom_api_token.
-# Imported as-is with query on every dataset ("*"). Narrowing it to the ALB
-# dataset is a capability change, so it regenerates the token: that happens as
-# a planned rotation (#119 step 3), never as part of this import.
-import {
-  to = axiom_token.solidago_alb_query
-  id = "ab16a1d630d9edd926fccad2bddea5288fb9a60b26ead8a057d88da017e723bd"
-}
-
+# Consumer: lentago/drosera, reading axiom_tokens["cjp-solidago-alb-query"]
+# from this state (drosera#313). Query on the ALB dataset only: every drosera
+# panel through this datasource queries cjp-solidago-alb. Narrowed from "*"
+# in #119 step 3, a planned rotation.
 resource "axiom_token" "solidago_alb_query" {
   name = "cjp-solidago-alb-query"
 
   dataset_capabilities = {
-    "*" = { query = ["read"] }
+    "cjp-solidago-alb" = { query = ["read"] }
   }
 
   lifecycle {
