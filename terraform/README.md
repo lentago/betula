@@ -71,6 +71,58 @@ bootstrap token the provider authenticates with stays hand-managed (see
   override yet; the first planned rotation (#119 step 3) adds one.
 - **`prevent_destroy` on every token.** Removing a token revokes it at once,
   with no grace period.
-- **Handoff:** consumers will read regenerated values from this state (#119
-  steps 2–3, decided 2026-11-04). Until then a rotation is a manual handoff:
-  update the consumer's secret within the grace period and verify ingest.
+- **Handoff:** consumers read token values from this state (#119, option A,
+  decided 2026-11-04). See *Reading a token from another repo* below.
+
+### Reading a token from another repo
+
+The interface is a single sensitive output, `axiom_tokens` (`outputs.tf`): a
+map from token name to value. A consumer reads it read-only and takes only its
+own entry:
+
+```hcl
+data "terraform_remote_state" "betula" {
+  backend = "s3"
+  config = {
+    bucket = "solidago-tfstate-365184644049"
+    key    = "betula/terraform.tfstate"
+    region = "us-east-1"
+  }
+}
+
+locals {
+  # null until betula first regenerates this token: keep the current value.
+  axiom_query_token = data.terraform_remote_state.betula.outputs.axiom_tokens["cjp-solidago-alb-query"]
+}
+```
+
+- **Access: one state key, read-only.** The consumer's CI role needs
+  `s3:GetObject` on `solidago-tfstate-365184644049/betula/terraform.tfstate`
+  and `kms:Decrypt` on the tfstate CMK, and nothing else: no `PutObject`, and
+  no lock table, since a remote-state read never takes the lock. Roles are
+  granted in lentago/solidago `modules/iam`.
+- **The output is the contract, not an access boundary.** Read access covers
+  the whole state object, including every token attribute in it. Grant it only
+  to roles that consume a token here.
+- **Accepted risk: every reader sees all three tokens.** This follows from
+  serving every consumer from one state key (#119, option A), and it is
+  recorded here deliberately:
+  - drosera's role, granted for the query token, can also read the two
+    ingest tokens. Each can only ingest into its own `cjp-solidago-*` dataset.
+  - solidago's roles can read the query token. They can already read every
+    state object in the bucket (lentago/solidago#240).
+  - The widest token, query on `*`, shrinks to query on `cjp-solidago-alb`
+    at its first planned rotation (#119 step 3), before any consumer depends
+    on reading it from here.
+
+  Per-consumer isolation would need a separate state key per consumer.
+- **Null until the first rotation.** Axiom returns a value only when a token
+  is created or regenerated, and the three tokens were imported (#153). So
+  every entry is null until that token's first planned rotation. A consumer
+  must treat null as "keep the current value" and fail loudly rather than
+  deploy an empty credential.
+- **Rotation timing.** A planned rotation regenerates the token on betula's
+  apply, and the old value lapses after `rotation_grace_period` (48h). Each
+  consumer must re-run its apply within that window to pick up the new value.
+  Consumer-side work: lentago/solidago and lentago/drosera issues linked from
+  #119.
