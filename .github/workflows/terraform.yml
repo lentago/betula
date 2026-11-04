@@ -24,6 +24,13 @@ env:
   # table only (lentago/solidago#207).
   AWS_ROLE: arn:aws:iam::365184644049:role/betula-github-actions-terraform
   AWS_REGION: us-east-1
+  # jq over `terraform show -json`: one line per axiom_token the plan would
+  # update or delete (replace is delete+create). Used by the token rotation
+  # guard in the plan and apply jobs (#119).
+  TOKEN_GUARD: >-
+    .resource_changes[]? | select(.type == "axiom_token")
+    | select(any(.change.actions[]; . == "update" or . == "delete"))
+    | "\(.address): \(.change.actions | join("+"))"
 
 jobs:
   changes:
@@ -143,6 +150,24 @@ jobs:
               body,
             });
 
+      # Token rotation guard (#119). An update or delete on an axiom_token
+      # regenerates or revokes a credential another repo holds, yet the plan
+      # still exits 0, so `gate` alone would pass it. Imports (no-op) and new
+      # tokens (create) pass. The apply job runs the same check. A planned
+      # rotation needs an override, which arrives with #119 step 3; until then
+      # any token update or delete fails here.
+      - name: Token rotation guard
+        if: steps.plan.outcome == 'success'
+        run: |
+          terraform show -json tfplan > plan.json
+          blocked=$(jq -r "$TOKEN_GUARD" plan.json)
+          if [ -n "$blocked" ]; then
+            echo "::error::This plan would regenerate or revoke an Axiom token (terraform/README.md § Tokens):"
+            echo "$blocked"
+            exit 1
+          fi
+          echo "Token rotation guard: no token update or delete in this plan."
+
       - name: Fail if terraform plan failed
         if: steps.plan.outcome == 'failure'
         run: exit 1
@@ -186,8 +211,25 @@ jobs:
       - name: init
         run: terraform init -input=false
 
+      # Plan, guard, then apply that saved plan, so the guard checks exactly
+      # what gets applied. It catches a token change that never had a PR plan,
+      # such as drift in the Axiom UI picked up by an unrelated merge.
+      - name: plan
+        run: terraform plan -no-color -input=false -out=tfplan
+
+      - name: Token rotation guard
+        run: |
+          terraform show -json tfplan > plan.json
+          blocked=$(jq -r "$TOKEN_GUARD" plan.json)
+          if [ -n "$blocked" ]; then
+            echo "::error::Apply blocked: this plan would regenerate or revoke an Axiom token (terraform/README.md § Tokens):"
+            echo "$blocked"
+            exit 1
+          fi
+          echo "Token rotation guard: no token update or delete in this plan."
+
       - name: apply
-        run: terraform apply -auto-approve -no-color -input=false
+        run: terraform apply -no-color -input=false tfplan
 
   # Single fan-in check for the pipeline: green when validate/plan succeeded or
   # were skipped (non-terraform PR), red when either failed or was cancelled.
