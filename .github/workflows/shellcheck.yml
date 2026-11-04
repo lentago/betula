@@ -24,3 +24,4 @@ jobs:
         scripts/rotate_logs.sh
         scripts/device_inventory_publish.sh
         clients/github/deploy.sh
+        .github/scripts/token-guard.sh

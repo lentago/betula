@@ -55,7 +55,7 @@ bootstrap token the provider authenticates with stays hand-managed (see
 |---|---|---|
 | `solidago-ecs-ingest` | ingest `cjp-solidago-ecs` | solidago Secrets Manager `…-axiom-ingest-header` (ECS FireLens) |
 | `cjp-solidago-alb` | ingest `cjp-solidago-alb` | the ALB log shipper (`clients/aws/alb-logs/`, deployed from solidago) |
-| `cjp-solidago-alb-query` | query `*` (to be narrowed in a planned rotation) | drosera `TF_VAR_axiom_api_token` (*Solidago Axiom* datasource) |
+| `cjp-solidago-alb-query` | query `cjp-solidago-alb` (narrowed from `*` in #119 step 3) | drosera *Solidago Axiom* datasource, reading `axiom_tokens` (drosera#313) |
 
 - **Any field change regenerates the token.** In provider 1.6.x a difference
   in `name`, `description`, `expires_at` or either capability block makes the
@@ -63,12 +63,22 @@ bootstrap token the provider authenticates with stays hand-managed (see
   `rotation_grace_period` (48h by default). A plan showing `update in-place`
   on a token is therefore a **rotation**: merge it only with the consumer
   handoff ready. Adopting a live token must plan as `import` with `0 to change`.
-- **CI enforces it.** The token rotation guard in
-  `.github/workflows/terraform.yml` fails the PR plan, and the apply on
-  `main`, when the plan would update or delete any `axiom_token`. That also
-  catches drift: a token edited in the Axiom UI blocks the next apply instead
-  of being silently regenerated. Imports and new tokens pass. There is no
-  override yet; the first planned rotation (#119 step 3) adds one.
+- **CI enforces it.** The token rotation guard
+  (`.github/scripts/token-guard.sh`) runs over the saved plan in the PR plan
+  job and in the apply on `main`:
+  - **A token delete or replace always fails.** No label covers it.
+  - **A token update fails** unless the PR carries the `token-rotation` label
+    and its most recent `labeled` event came from a User account, not a Bot.
+    On `main`, the guard reads the label from the PR the push merged.
+  - **Anything else passes,** including imports, new tokens, and dataset
+    changes.
+
+  That also catches drift: a token edited in the Axiom UI blocks the next
+  apply instead of being silently regenerated.
+- **The label records intent; it is not an approval.** Sessions run under
+  the operator's account, so a User-applied label shows that a human account
+  declared the rotation, and it keeps the runner App from declaring one for
+  itself. The authorization is the rotation's release on its issue.
 - **`prevent_destroy` on every token.** Removing a token revokes it at once,
   with no grace period.
 - **Handoff:** consumers read token values from this state (#119, option A,
@@ -111,9 +121,9 @@ locals {
     ingest tokens. Each can only ingest into its own `cjp-solidago-*` dataset.
   - solidago's roles can read the query token. They can already read every
     state object in the bucket (lentago/solidago#240).
-  - The widest token, query on `*`, shrinks to query on `cjp-solidago-alb`
-    at its first planned rotation (#119 step 3), before any consumer depends
-    on reading it from here.
+  - The widest token was narrowed from query on `*` to query on
+    `cjp-solidago-alb` (#119 step 3), at the same rotation that first put its
+    value here.
 
   Per-consumer isolation would need a separate state key per consumer.
 - **Null until the first rotation.** Axiom returns a value only when a token
@@ -126,3 +136,22 @@ locals {
   consumer must re-run its apply within that window to pick up the new value.
   Consumer-side work: lentago/solidago and lentago/drosera issues linked from
   #119.
+
+### Planned rotation
+
+1. **Consumer ready.** The consumer reads its entry from `axiom_tokens`, with
+   a fallback to its current value while the entry is null, and its owner
+   can run an apply within 48h of betula's.
+2. **PR.** Change the token in `tokens.tf` and label the PR
+   `token-rotation`. Labels are read live, so if the plan job ran before
+   the label, re-run it.
+3. **Plan.** The plan comment must show `update in-place` only on the tokens
+   you mean to rotate, and `0 to destroy`.
+4. **Merge.** betula's apply regenerates each token. Its old value lapses 48h
+   later.
+5. **Consumer apply within 48h.** Verify the consumer works on the new value,
+   for example with a datasource health check or a fresh ingest event.
+6. **Remove the fallback** from the consumer once it reads the new value.
+
+Rollback is another rotation: revert the PR with the label, then run the
+consumer apply. Within 48h the old value also still works.

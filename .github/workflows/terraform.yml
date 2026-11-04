@@ -12,6 +12,7 @@ on:
     paths:
       - "terraform/**"
       - ".github/workflows/terraform.yml"
+      - ".github/scripts/token-guard.sh"
 
 permissions:
   contents: read
@@ -24,13 +25,6 @@ env:
   # table only (lentago/solidago#207).
   AWS_ROLE: arn:aws:iam::365184644049:role/betula-github-actions-terraform
   AWS_REGION: us-east-1
-  # jq over `terraform show -json`: one line per axiom_token the plan would
-  # update or delete (replace is delete+create). Used by the token rotation
-  # guard in the plan and apply jobs (#119).
-  TOKEN_GUARD: >-
-    .resource_changes[]? | select(.type == "axiom_token")
-    | select(any(.change.actions[]; . == "update" or . == "delete"))
-    | "\(.address): \(.change.actions | join("+"))"
 
 jobs:
   changes:
@@ -50,7 +44,7 @@ jobs:
             echo "tf=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           changed=$(git diff --name-only "$BASE_SHA" HEAD)
-          if echo "$changed" | grep -qE '^terraform/|^\.github/workflows/terraform\.yml$'; then
+          if echo "$changed" | grep -qE '^terraform/|^\.github/workflows/terraform\.yml$|^\.github/scripts/token-guard\.sh$'; then
             echo "tf=true" >> "$GITHUB_OUTPUT"
           else
             echo "tf=false" >> "$GITHUB_OUTPUT"
@@ -152,21 +146,18 @@ jobs:
 
       # Token rotation guard (#119). An update or delete on an axiom_token
       # regenerates or revokes a credential another repo holds, yet the plan
-      # still exits 0, so `gate` alone would pass it. Imports (no-op) and new
-      # tokens (create) pass. The apply job runs the same check. A planned
-      # rotation needs an override, which arrives with #119 step 3; until then
-      # any token update or delete fails here.
+      # still exits 0, so `gate` alone would pass it. The script fails any
+      # token delete, and any token update unless the PR carries the
+      # token-rotation label from a human account. The apply job runs it too.
+      # Labels are read live, so after labeling, re-run this job.
       - name: Token rotation guard
         if: steps.plan.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           terraform show -json tfplan > plan.json
-          blocked=$(jq -r "$TOKEN_GUARD" plan.json)
-          if [ -n "$blocked" ]; then
-            echo "::error::This plan would regenerate or revoke an Axiom token (terraform/README.md § Tokens):"
-            echo "$blocked"
-            exit 1
-          fi
-          echo "Token rotation guard: no token update or delete in this plan."
+          ../.github/scripts/token-guard.sh plan.json "$PR_NUMBER"
 
       - name: Fail if terraform plan failed
         if: steps.plan.outcome == 'failure'
@@ -217,16 +208,16 @@ jobs:
       - name: plan
         run: terraform plan -no-color -input=false -out=tfplan
 
+      # The PR is the one this push merged (squash merge: one PR per commit).
+      # If none is found, the guard fails any token update.
       - name: Token rotation guard
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           terraform show -json tfplan > plan.json
-          blocked=$(jq -r "$TOKEN_GUARD" plan.json)
-          if [ -n "$blocked" ]; then
-            echo "::error::Apply blocked: this plan would regenerate or revoke an Axiom token (terraform/README.md § Tokens):"
-            echo "$blocked"
-            exit 1
-          fi
-          echo "Token rotation guard: no token update or delete in this plan."
+          pr=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
+            --jq '[.[] | select(.merged_at != null)][0].number // empty' || true)
+          ../.github/scripts/token-guard.sh plan.json "$pr"
 
       - name: apply
         run: terraform apply -no-color -input=false tfplan
