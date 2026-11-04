@@ -20,7 +20,7 @@
 # Consumer: solidago Secrets Manager `…-axiom-ingest-header`.
 import {
   to = axiom_token.solidago_ecs_ingest
-  id = "TODO-token-id-solidago-ecs-ingest" # live token ID; see the PR
+  id = "ef289421464f0254c71a9941a8e5b2f2c2721fc29b9ab2f7a8cb5b481a7a8719"
 }
 
 resource "axiom_token" "solidago_ecs_ingest" {
@@ -39,7 +39,7 @@ resource "axiom_token" "solidago_ecs_ingest" {
 # Consumer: the clients/aws/alb-logs shipper deployed from lentago/solidago.
 import {
   to = axiom_token.solidago_alb_ingest
-  id = "TODO-token-id-cjp-solidago-alb" # live token ID; see the PR
+  id = "a887a0dbb04f8001373ee7c14ef7a9952c13038a44cec357b0b22eaf7341a1d9"
 }
 
 resource "axiom_token" "solidago_alb_ingest" {
@@ -61,7 +61,7 @@ resource "axiom_token" "solidago_alb_ingest" {
 # a planned rotation (#119 step 3), never as part of this import.
 import {
   to = axiom_token.solidago_alb_query
-  id = "TODO-token-id-cjp-solidago-alb-query" # live token ID; see the PR
+  id = "ab16a1d630d9edd926fccad2bddea5288fb9a60b26ead8a057d88da017e723bd"
 }
 
 resource "axiom_token" "solidago_alb_query" {
