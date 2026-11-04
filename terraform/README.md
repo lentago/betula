@@ -40,11 +40,14 @@ Axiom lets a token grant only the capabilities it holds itself
 ([Create API token](https://axiom.co/docs/restapi/endpoints/createToken.md)).
 A rotation regenerates a token with its configured capabilities, so the
 bootstrap token must hold every capability that any token in `tokens.tf` holds.
-Without them, the next rotation fails with a 400.
+Without them, expect the next rotation to fail. Axiom rejects a capability
+the caller doesn't have with a 400 on create, and rejects invalid capabilities
+with a 400 on
+[regenerate](https://axiom.co/docs/restapi/endpoints/regenerateToken.md).
 
 | Capability | Why |
 |---|---|
-| org `apiTokens`: create, read, update, delete | import and refresh tokens, regenerate on a rotation, delete only if a token is ever removed |
+| org `apiTokens`: create, read, update, delete | refresh tokens, regenerate on a rotation, import when adopting a token, and delete only if a token is ever removed |
 | org `datasets`: create, read, update, delete | `datasets.tf`: create, retention, and delete only on a retirement |
 | dataset `cjp-solidago-ecs`: ingest create | to grant `solidago-ecs-ingest` |
 | dataset `cjp-solidago-alb`: ingest create, query read | to grant `cjp-solidago-alb` and `cjp-solidago-alb-query` |
@@ -56,8 +59,9 @@ starred queries, so it needs none of those capabilities.
 hand first.** That covers a new dataset in a token's capabilities, or a new
 kind of access.
 
-**Changing the bootstrap token's capabilities regenerates it.** Axiom has no
-in-place edit for a token, so a change issues a new value. Update the
+**Changing the bootstrap token's capabilities regenerates it.** Axiom's token
+API offers create, regenerate and delete, with no update, so a change issues a
+new value. Update the
 `AXIOM_TF_API_TOKEN` repo secret, then re-run a plan to confirm it.
 
 ## Runbook
