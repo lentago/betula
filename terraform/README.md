@@ -27,13 +27,38 @@ this org's and are deliberately not managed.
 
 - **Axiom:** the provider reads `AXIOM_API_TOKEN`. CI passes the
   `AXIOM_TF_API_TOKEN` repo secret. That token is the **bootstrap credential**:
-  created by hand in Axiom (Settings → API Tokens) with org capabilities for
-  datasets and API tokens, and deliberately **not** managed by this config, so it
-  can't lock itself out.
+  created by hand in Axiom (Settings → API Tokens), and deliberately **not**
+  managed by this config, so it can't lock itself out. What it needs is below.
 - **State:** S3 backend `solidago-tfstate-365184644049` / `betula/terraform.tfstate`
   with the shared lock table. CI assumes `betula-github-actions-terraform` via
   OIDC. That role is defined in lentago/solidago (`modules/iam`, solidago#207)
   and can touch only this state key.
+
+### What the bootstrap token needs
+
+Axiom lets a token grant only the capabilities it holds itself
+([Create API token](https://axiom.co/docs/restapi/endpoints/createToken.md)).
+A rotation regenerates a token with its configured capabilities, so the
+bootstrap token must hold every capability that any token in `tokens.tf` holds.
+Without them, the next rotation fails with a 400.
+
+| Capability | Why |
+|---|---|
+| org `apiTokens`: create, read, update, delete | import and refresh tokens, regenerate on a rotation, delete only if a token is ever removed |
+| org `datasets`: create, read, update, delete | `datasets.tf`: create, retention, and delete only on a retirement |
+| dataset `cjp-solidago-ecs`: ingest create | to grant `solidago-ecs-ingest` |
+| dataset `cjp-solidago-alb`: ingest create, query read | to grant `cjp-solidago-alb` and `cjp-solidago-alb-query` |
+
+**Nothing else.** This config manages no dashboards, monitors, notifiers or
+starred queries, so it needs none of those capabilities.
+
+**Before giving a token here a new capability, widen the bootstrap token by
+hand first.** That covers a new dataset in a token's capabilities, or a new
+kind of access.
+
+**Changing the bootstrap token's capabilities regenerates it.** Axiom has no
+in-place edit for a token, so a change issues a new value. Update the
+`AXIOM_TF_API_TOKEN` repo secret, then re-run a plan to confirm it.
 
 ## Runbook
 
