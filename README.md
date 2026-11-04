@@ -19,9 +19,10 @@ The current collector — this repo's implementation today — ships DNS,
 connection flow, and TLS handshake logs from a **Firewalla Gold SE** to
 **Grafana Cloud Loki**. The roadmap is a core/client split so the Firewalla
 becomes one client among several, with AWS (the solidago platform) the intended
-next source. Renamed from `firewalla-axiom-pipeline` on 2026-07-04; the
-on-device clone path `/home/pi/.firewalla/firewalla-axiom-pipeline/`
-deliberately keeps the old name.
+next source. Renamed from `firewalla-axiom-pipeline` on 2026-07-04. The
+on-device clone moved to `/home/pi/.firewalla/betula/` and the Fluent Bit
+container from `fluent-bit-axiom` to `betula-fluent-bit` under
+[#89](https://github.com/lentago/betula/issues/89).
 
 > **Destination change (2026-07-09):** betula no longer ships to Axiom. The
 > Axiom HTTP output, the device-inventory export, and the host/Zeek
@@ -85,7 +86,7 @@ contract plus the reusable shipper logic for two of them.
 **Proof this works:** [#75 — Add clients/aws contract: solidago ECS logs → Axiom via FireLens (Phase 2)](https://github.com/lentago/betula/pull/75), [#81 — feat(aws): ALB access-log S3 → Axiom shipper (clients/aws/alb-logs)](https://github.com/lentago/betula/pull/81), [#92 — feat(aws): CloudWatch Logs → Axiom forwarder (clients/aws/cloudwatch-logs)](https://github.com/lentago/betula/pull/92) — three emitters added in sequence, each without modifying the prior ones or the Firewalla client.
 
 **Change a live Firewalla config value via GitOps.**
-Edit [`fluent-bit/fluent-bit.conf`](fluent-bit/fluent-bit.conf) (or [`cron/user_crontab`](cron/user_crontab)) on a branch and open a PR; `shellcheck` and `docs-check` gate the merge. Once merged, the Firewalla's cron-driven [`scripts/gitops-sync.sh`](scripts/gitops-sync.sh) polls `origin/main` within 5 minutes, dry-run validates the new config in a throwaway container, and only then swaps the live files and restarts the `fluent-bit-axiom` container — with automatic rollback if the dry-run fails. You never SSH in; the merged PR is the whole change record.
+Edit [`fluent-bit/fluent-bit.conf`](fluent-bit/fluent-bit.conf) (or [`cron/user_crontab`](cron/user_crontab)) on a branch and open a PR; `shellcheck` and `docs-check` gate the merge. Once merged, the Firewalla's cron-driven [`scripts/gitops-sync.sh`](scripts/gitops-sync.sh) polls `origin/main` within 5 minutes, dry-run validates the new config in a throwaway container, and only then swaps the live files and restarts the `betula-fluent-bit` container — with automatic rollback if the dry-run fails. You never SSH in; the merged PR is the whole change record.
 
 **Proof this works:** [#44 — fix(fluent-bit): unbounded Retry_Limit on Loki output](https://github.com/lentago/betula/pull/44) (a config change that self-deployed via the poller), [#82 — Stop shipping to Axiom; Grafana Cloud Loki becomes the sole output](https://github.com/lentago/betula/pull/82) (a major output change applied live via GitOps).
 
@@ -144,7 +145,7 @@ The Fluent Bit container also exposes a built-in HTTP metrics endpoint for on-de
 without touching Loki:
 
 ```bash
-ssh pi@<fw-ip> 'sudo docker exec fluent-bit-axiom curl -s localhost:2020/api/v1/metrics'
+ssh pi@<fw-ip> 'sudo docker exec betula-fluent-bit curl -s localhost:2020/api/v1/metrics'
 ```
 
 ## GitOps auto-deploy
@@ -153,7 +154,7 @@ Once bootstrapped, the Firewalla keeps itself in sync with `origin/main`. The no
 
 **How the loop works.** `cron/user_crontab` schedules `scripts/gitops-sync.sh` every 5 minutes. The script:
 
-1. `git fetch origin` in the on-device clone at `/home/pi/.firewalla/firewalla-axiom-pipeline/`.
+1. `git fetch origin` in the on-device clone at `/home/pi/.firewalla/betula/`.
 2. If `HEAD == origin/main`: silent exit.
 3. Otherwise: capture a rollback SHA, `git reset --hard origin/main`, classify
    the diff (fluent-bit config? crontab? scripts? docs?), and act only on the
@@ -161,7 +162,7 @@ Once bootstrapped, the Firewalla keeps itself in sync with `origin/main`. The no
 4. **Validate** any new `fluent-bit/*.conf` via `fluent-bit --dry-run` in a
    throwaway container *before* swapping the live files.
 5. On validation pass: copy configs into `/home/pi/.firewalla/config/`, run
-   `docker restart fluent-bit-axiom`, reinstall crontab if it changed.
+   `docker restart betula-fluent-bit`, reinstall crontab if it changed.
 6. On validation fail: `git reset --hard <rollback-sha>` and log the dry-run
    output. The live container keeps running on the last-known-good config.
 
@@ -241,13 +242,13 @@ scp .env pi@${FW_IP}:/home/pi/.firewalla/config/log_shipping.env
 ssh pi@${FW_IP} 'curl -sSL https://raw.githubusercontent.com/lentago/betula/main/scripts/bootstrap.sh | bash'
 ```
 
-`scripts/bootstrap.sh` clones this repo to `/home/pi/.firewalla/firewalla-axiom-pipeline/`, copies the config tree into `/home/pi/.firewalla/config/`, merges the crontab via Firewalla's `update_crontab.sh` (which includes the 5-min GitOps poller), and starts the Fluent Bit container. One-time only — after this, the device self-syncs from `main`.
+`scripts/bootstrap.sh` clones this repo to `/home/pi/.firewalla/betula/`, copies the config tree into `/home/pi/.firewalla/config/`, merges the crontab via Firewalla's `update_crontab.sh` (which includes the 5-min GitOps poller), and starts the Fluent Bit container. One-time only — after this, the device self-syncs from `main`.
 
 ### 5. Verify
 
 ```bash
 # Container running and shipping
-ssh pi@${FW_IP} 'sudo docker logs --tail 20 fluent-bit-axiom'
+ssh pi@${FW_IP} 'sudo docker logs --tail 20 betula-fluent-bit'
 
 # GitOps poller has seen origin (look for a recent "Deploy complete" or empty log = up-to-date)
 ssh pi@${FW_IP} 'tail -20 /home/pi/.firewalla/config/gitops-sync.log 2>/dev/null || echo "(log empty — clean no-ops)"'
@@ -329,14 +330,14 @@ Expected sequence on a successful config change:
 [ts] [INFO]   <sha> <commit subject>
 [ts] [INFO] Validating new fluent-bit config via dry-run
 [ts] [INFO] Dry-run OK
-[ts] [INFO] Restarting fluent-bit-axiom
+[ts] [INFO] Restarting betula-fluent-bit
 [ts] [INFO] Deploy complete at <sha>
 ```
 
 Failure modes:
 
 - `Dry-run FAILED — rolling back.` → your new `fluent-bit/*.conf` doesn't parse. The log shows the fluent-bit error. Live container keeps serving on the previous SHA.
-- `git fetch failed` → Firewalla can't reach GitHub. Check WAN, then `ssh pi@<fw-ip> 'git -C /home/pi/.firewalla/firewalla-axiom-pipeline ls-remote origin'`.
+- `git fetch failed` → Firewalla can't reach GitHub. Check WAN, then `ssh pi@<fw-ip> 'git -C /home/pi/.firewalla/betula ls-remote origin'`.
 - `docker: permission denied` → cron's `pi` user lost docker-group access. The script uses `sudo docker` to work around this; if it broke, check `getent group docker` includes `pi` and `sudo -n -l` works for the docker binary.
 - Log is empty / nothing happens → the poller cron isn't installed. `ssh pi@<fw-ip> crontab -l | grep gitops-sync`.
 
@@ -345,15 +346,21 @@ Failure modes:
 <details>
 <summary><strong>Data stopped flowing</strong></summary>
 
+> **Container name during #89:** until the container step of
+> [#89](https://github.com/lentago/betula/issues/89) runs, the live container
+> may still be named `fluent-bit-axiom`. The healthcheck and poller accept
+> either name, and `start_log_shipping.sh` removes both before it starts
+> `betula-fluent-bit`.
+
 ```bash
 # Check container status
 sudo docker ps -a
 
 # Check for errors
-sudo docker logs --tail 50 fluent-bit-axiom
+sudo docker logs --tail 50 betula-fluent-bit
 
 # Restart the container
-sudo docker restart fluent-bit-axiom
+sudo docker restart betula-fluent-bit
 ```
 
 Common causes:
@@ -415,7 +422,7 @@ The `start_log_shipping.sh` script now automatically wipes the position tracker
 on every startup, so this should be self-healing. If you somehow hit it anyway:
 
 ```bash
-sudo docker rm -f fluent-bit-axiom
+sudo docker rm -f betula-fluent-bit
 sudo rm -rf /home/pi/.firewalla/config/fluent-bit-data/*
 sudo /home/pi/.firewalla/config/post_main.d/start_log_shipping.sh
 ```
@@ -423,7 +430,7 @@ sudo /home/pi/.firewalla/config/post_main.d/start_log_shipping.sh
 **Check RAM usage**
 
 ```bash
-sudo docker stats fluent-bit-axiom --no-stream
+sudo docker stats betula-fluent-bit --no-stream
 ```
 
 **Verify Zeek logs are being written**
@@ -455,7 +462,7 @@ What it does, step by step:
 `deploy.sh` does **not** clone the repo or install the GitOps poller's target directory. If you used `deploy.sh` to bootstrap from scratch (no `bootstrap.sh`), follow up with:
 
 ```bash
-ssh pi@<fw-ip> 'git clone https://github.com/lentago/betula.git /home/pi/.firewalla/firewalla-axiom-pipeline'
+ssh pi@<fw-ip> 'git clone https://github.com/lentago/betula.git /home/pi/.firewalla/betula'
 ```
 
 After that, the cron poller (already in `user_crontab`) will start syncing every 5 min.
