@@ -69,7 +69,7 @@
   <text class="th" x="330" y="250" text-anchor="middle">Fluent Bit (Docker)</text>
   <text class="ts" x="330" y="268" text-anchor="middle">fluent/fluent-bit:latest · --network host --restart always</text>
   <text class="ts" x="330" y="286" text-anchor="middle">~/.firewalla/config/fluent-bit.conf</text>
-  <text class="ts" x="330" y="304" text-anchor="middle">container name: fluent-bit-axiom</text>
+  <text class="ts" x="330" y="304" text-anchor="middle">container name: betula-fluent-bit</text>
 </g>
 
 <!-- Management row -->

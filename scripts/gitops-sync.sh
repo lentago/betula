@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# GitOps poller for firewalla-axiom-pipeline.
+# GitOps poller for betula's Firewalla collector client.
 #
 # Runs every 5 min from user_crontab. Fetches origin/main, compares to HEAD,
 # and on divergence: validates the new fluent-bit config via `docker run
@@ -19,12 +19,15 @@
 # =============================================================================
 set -euo pipefail
 
-readonly CLONE_PATH="/home/pi/.firewalla/firewalla-axiom-pipeline"
+readonly CLONE_PATH="/home/pi/.firewalla/betula"
 readonly LIVE_DIR="/home/pi/.firewalla/config"
 readonly LOCK_FILE="${LIVE_DIR}/.gitops-sync.lock"
 readonly LOG_FILE="${LIVE_DIR}/gitops-sync.log"
 readonly LOG_MAX_BYTES=1048576
-readonly CONTAINER_NAME="fluent-bit-axiom"
+readonly CONTAINER_NAME="betula-fluent-bit"
+# The container was named fluent-bit-axiom until #89. While that rename rolls
+# out, a config restart goes to whichever name exists (fluent_container).
+readonly LEGACY_CONTAINER_NAME="fluent-bit-axiom"
 readonly IMAGE="fluent/fluent-bit:latest"
 readonly LOG_SHIPPING_ENV="${LIVE_DIR}/log_shipping.env"
 
@@ -77,6 +80,20 @@ dryrun_fluent_bit() {
     "$IMAGE" \
     /fluent-bit/bin/fluent-bit -c /fluent-bit/etc/fluent-bit.conf --dry-run \
     > "$err_out" 2>&1
+}
+
+# Name of the Fluent Bit container to restart: the legacy name only when it
+# exists and the current one does not (#89 transition); otherwise the current
+# name, so a missing container still fails the restart loudly, as before.
+fluent_container() {
+  local names
+  names=$(sudo docker ps -a --format '{{.Names}}' 2>/dev/null || true)
+  if grep -qx "$LEGACY_CONTAINER_NAME" <<< "$names" \
+      && ! grep -qx "$CONTAINER_NAME" <<< "$names"; then
+    printf '%s\n' "$LEGACY_CONTAINER_NAME"
+  else
+    printf '%s\n' "$CONTAINER_NAME"
+  fi
 }
 
 # Read one KEY from Fluent Bit's docker-style env file (read, not sourced).
@@ -257,9 +274,11 @@ main() {
   if [[ "$touched_fluent_bit" == true ]]; then
     cp "${CLONE_PATH}/fluent-bit/fluent-bit.conf" "${LIVE_DIR}/fluent-bit.conf"
     cp "${CLONE_PATH}/fluent-bit/parsers.conf"    "${LIVE_DIR}/parsers.conf"
-    log INFO "Restarting ${CONTAINER_NAME}"
-    if ! sudo docker restart "$CONTAINER_NAME" > /dev/null; then
-      log ERROR "docker restart ${CONTAINER_NAME} failed — manual intervention needed"
+    local container
+    container=$(fluent_container)
+    log INFO "Restarting ${container}"
+    if ! sudo docker restart "$container" > /dev/null; then
+      log ERROR "docker restart ${container} failed — manual intervention needed"
       exit 1
     fi
   fi

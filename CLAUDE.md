@@ -14,10 +14,11 @@ a meal of it.
 **Betula** is the Lentago Labs log capture layer — renamed from
 `firewalla-axiom-pipeline` on 2026-07-04. Direction of travel: a core/client
 split where the Firewalla is one collector client and the solidago AWS
-platform is the next. **Keep the old name on-device**: the clone at
-`/home/pi/.firewalla/firewalla-axiom-pipeline/` and `bootstrap.sh`'s
-`CLONE_PATH` stay as-is (live gitops path; the device remote already points at
-`lentago/betula`).
+platform is the next. On the device, the clone was named
+`firewalla-axiom-pipeline` and the Fluent Bit container `fluent-bit-axiom`
+until #89, which moved them to `/home/pi/.firewalla/betula/` and
+`betula-fluent-bit`. Until #89's cleanup PR, the scripts still accept the
+legacy container name.
 
 A log-shipping pipeline that captures DNS queries, connection flows, and ACL block events from a **Firewalla Gold SE** appliance and sends them to **Grafana Cloud Loki** for search, dashboards, and alerting via [lentago/drosera](https://github.com/lentago/drosera).
 
@@ -123,7 +124,7 @@ betula/
 |------|-------------|
 | `/home/pi/.firewalla/config/` | Persistent config dir (survives firmware updates) |
 | `/home/pi/.firewalla/config/post_main.d/` | Auto-run scripts after boot/firmware update |
-| `/home/pi/.firewalla/firewalla-axiom-pipeline/` | On-device git clone managed by `gitops-sync.sh` |
+| `/home/pi/.firewalla/betula/` | On-device git clone managed by `gitops-sync.sh` |
 | `/home/pi/.firewalla/config/gitops-sync.log` | GitOps poller log (1 MB rotation → `.log.1`) |
 | `/home/pi/.firewalla/config/.gitops-sync.lock` | flock file preventing concurrent poller runs |
 | `/bspool/manager/dns.log` | Zeek DNS log (tmpfs, 30 MB limit) |
@@ -154,7 +155,7 @@ Defined in `.env` (copied from `env.example`), never committed to git:
 `scripts/gitops-sync.sh` runs every 5 min from `cron/user_crontab`. It
 fetches `origin/main`, validates any new `fluent-bit/*.conf` via
 `fluent-bit --dry-run` in a throwaway container, then swaps live files in
-`/home/pi/.firewalla/config/` and restarts `fluent-bit-axiom` only if the
+`/home/pi/.firewalla/config/` and restarts `betula-fluent-bit` only if the
 relevant files changed. Validation failure → `git reset --hard` to the
 rollback SHA; the live container is never disturbed by a bad commit.
 
@@ -173,7 +174,7 @@ without `bootstrap.sh`). Steps:
 7. Merges cron jobs from `cron/user_crontab` via Firewalla's `update_crontab.sh` (never a raw `crontab` install — that wipes system jobs, #67)
 
 ### Common Troubleshooting
-- **No data in Loki**: Check `docker logs fluent-bit-axiom` for auth errors (401/403 = bad `GRAFANA_CLOUD_LOGS_*` creds; 5xx = Grafana Cloud outage, retries automatically). The container name is still `fluent-bit-axiom` (unchanged to avoid disturbing the running instance).
+- **No data in Loki**: Check `docker logs betula-fluent-bit` for auth errors (401/403 = bad `GRAFANA_CLOUD_LOGS_*` creds; 5xx = Grafana Cloud outage, retries automatically). Until #89's container step runs, the live container may still be `fluent-bit-axiom`.
 - **A merged PR didn't deploy**: Tail `/home/pi/.firewalla/config/gitops-sync.log`. Look for `Dry-run FAILED` (bad config — rollback already happened, fix the PR), `git fetch failed` (WAN/GitHub), or nothing at all (poller cron not installed — `crontab -l | grep gitops-sync`).
 - **bspool full**: The 5-min cron cleanup job handles rotated logs; verify it's running
 
