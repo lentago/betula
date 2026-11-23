@@ -134,8 +134,11 @@ session started by `claude remote-control` from a CLI is `remote-control`
 Control from a claude.ai project thread is `desktop`: it runs as a child of
 the desktop app with no remote or bridge variable, so nothing inside it can
 tell it from a local desktop session (verified on Claude Code 2.1.330). Its
-index record does carry the desktop app's `local_…` host session id in
-`links`, which groups it with the other sessions that app ran.
+index record keeps the desktop app's `local_…` id as `host_session_id`.
+**Not yet confirmed** whether that id is per conversation or per app process,
+so `stitch` does not join on it: as a link it could merge every session the
+app ran into one thread. Group by it by hand
+(`grep -l local_… <archive>/*/index/*.json`) until its scope is known.
 
 ## Put a conversation back together
 
@@ -145,8 +148,7 @@ cc-transcripts stitch <id> --merge > thread.jsonl                     # one time
 ```
 
 Each host's index names every id it saw: the local session id, the cloud
-session id, the Remote Control bridge id, the desktop app's host session id,
-and any id-shaped value in the
+session id, the Remote Control bridge id, and any id-shaped value in the
 transcript's first lines. Records that share one are joined. Merged lines carry
 `_betula: {host, surface, file}`.
 
