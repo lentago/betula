@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# One-time bootstrap of firewalla-axiom-pipeline on a fresh Firewalla.
+# One-time bootstrap of betula's Firewalla collector on a fresh Firewalla.
 #
 # Run ON the Firewalla as user `pi`. Prereqs:
 #   - /home/pi/.firewalla/config/log_shipping.env already exists with the
@@ -15,7 +15,7 @@
 set -euo pipefail
 
 readonly REPO_URL="https://github.com/lentago/betula.git"
-readonly CLONE_PATH="/home/pi/.firewalla/firewalla-axiom-pipeline"
+readonly CLONE_PATH="/home/pi/.firewalla/betula"
 readonly LIVE_DIR="/home/pi/.firewalla/config"
 readonly ENV_FILE="${LIVE_DIR}/log_shipping.env"
 

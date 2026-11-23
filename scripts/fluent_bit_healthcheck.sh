@@ -23,7 +23,12 @@
 
 set -euo pipefail
 
-CONTAINER_NAME="fluent-bit-axiom"
+CONTAINER_NAME="betula-fluent-bit"
+# The container was named fluent-bit-axiom until #89. While that rename rolls
+# out, a running legacy container counts as the pipeline, so this check never
+# starts a second Fluent Bit next to it.
+LEGACY_CONTAINER_NAME="fluent-bit-axiom"
+readonly START_SCRIPT="/home/pi/.firewalla/config/post_main.d/start_log_shipping.sh"
 LOGFILE="/home/pi/.firewalla/config/fluent-bit-healthcheck.log"
 CHECK_WINDOW="5m"
 readonly DATA_DIR="/home/pi/.firewalla/config/fluent-bit-data"
@@ -49,10 +54,25 @@ rotate_log() {
 rotate_log
 
 # --- Is the container even running? ------------------------------------------
-if ! sudo docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-    log "Container not running — starting via post_main.d script"
-    sudo /home/pi/.firewalla/config/post_main.d/start_log_shipping.sh 2>&1 | tee -a "$LOGFILE" >/dev/null
+# A docker failure reads as "nothing running", which hands off to the start
+# script (it waits for the daemon), as before.
+RUNNING=$(sudo docker ps --format '{{.Names}}' 2>/dev/null || true)
+if grep -qx "$CONTAINER_NAME" <<< "$RUNNING" \
+    && grep -qx "$LEGACY_CONTAINER_NAME" <<< "$RUNNING"; then
+    # Two Fluent Bits would ship every line twice and share the tail DBs. The
+    # start script removes both names and starts one.
+    log "WARNING: both ${CONTAINER_NAME} and ${LEGACY_CONTAINER_NAME} are running — restarting as one via post_main.d script"
+    sudo "$START_SCRIPT" 2>&1 | tee -a "$LOGFILE" >/dev/null
     exit 0
+fi
+if ! grep -qx "$CONTAINER_NAME" <<< "$RUNNING"; then
+    if grep -qx "$LEGACY_CONTAINER_NAME" <<< "$RUNNING"; then
+        CONTAINER_NAME="$LEGACY_CONTAINER_NAME"  # check the running legacy container (#89)
+    else
+        log "Container not running — starting via post_main.d script"
+        sudo "$START_SCRIPT" 2>&1 | tee -a "$LOGFILE" >/dev/null
+        exit 0
+    fi
 fi
 
 # --- Delivery-based liveness (#86) -------------------------------------------

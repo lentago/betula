@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Deploy firewalla-axiom-pipeline to a Firewalla Gold SE
+# Deploy betula's Firewalla collector to a Firewalla Gold SE
 #
 # Usage:
 #   ./deploy.sh <firewalla-ip>
@@ -42,7 +42,7 @@ if ! grep -qE '^GRAFANA_CLOUD_LOGS_HOST=.+' .env \
     exit 1
 fi
 
-echo "=== Deploying firewalla-axiom-pipeline to ${FW_IP} ==="
+echo "=== Deploying betula (Firewalla collector) to ${FW_IP} ==="
 
 # --- Helpers -----------------------------------------------------------------
 # Copy a file only if its md5 differs from the remote copy.
@@ -99,7 +99,9 @@ ssh "${FW_USER}@${FW_IP}" \
 # --- Start or restart the pipeline conditionally -----------------------------
 echo "[4/5] Managing Fluent Bit container..."
 container_running=$(ssh "${FW_USER}@${FW_IP}" \
-    "sudo docker inspect --format='{{.State.Running}}' fluent-bit-axiom 2>/dev/null || echo absent")
+    "sudo docker inspect --format='{{.State.Running}}' betula-fluent-bit 2>/dev/null \
+     || sudo docker inspect --format='{{.State.Running}}' fluent-bit-axiom 2>/dev/null \
+     || echo absent")  # legacy name until #89's cleanup
 
 if [ "$container_running" != "true" ]; then
     echo "  Container not running — starting..."
@@ -128,6 +130,6 @@ echo ""
 echo "=== Deployment complete ==="
 echo ""
 echo "Verify:"
-echo "  ssh ${FW_USER}@${FW_IP} 'sudo docker logs --tail 10 fluent-bit-axiom'"
+echo "  ssh ${FW_USER}@${FW_IP} 'sudo docker logs --tail 10 betula-fluent-bit'"
 echo ""
 echo "Then check Grafana Cloud Loki (Explore → {job=\"firewalla\"}) for incoming events."

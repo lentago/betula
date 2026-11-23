@@ -17,7 +17,11 @@ set -euo pipefail
 
 CONFIG_DIR="/home/pi/.firewalla/config"
 ENV_FILE="${CONFIG_DIR}/log_shipping.env"
-CONTAINER_NAME="fluent-bit-axiom"
+CONTAINER_NAME="betula-fluent-bit"
+# The container was named fluent-bit-axiom until #89. Both names are removed
+# below before the start, so a restart can never leave two Fluent Bits tailing
+# the same files and sharing one fluent-bit-data directory.
+LEGACY_CONTAINER_NAME="fluent-bit-axiom"
 IMAGE="fluent/fluent-bit:latest"
 
 # --- Load environment variables ----------------------------------------------
@@ -92,11 +96,13 @@ if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
     docker pull "$IMAGE"
 fi
 
-# --- Stop existing container -------------------------------------------------
-if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-    echo "[log-shipping] Stopping existing ${CONTAINER_NAME} container..."
-    docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
-fi
+# --- Stop existing container (current and legacy name, #89) -----------------
+for name in "$CONTAINER_NAME" "$LEGACY_CONTAINER_NAME"; do
+    if docker ps -a --format '{{.Names}}' | grep -q "^${name}$"; then
+        echo "[log-shipping] Stopping existing ${name} container..."
+        docker rm -f "$name" >/dev/null 2>&1 || true
+    fi
+done
 
 # --- Start Fluent Bit --------------------------------------------------------
 echo "[log-shipping] Starting Fluent Bit → Grafana Cloud Loki pipeline..."
