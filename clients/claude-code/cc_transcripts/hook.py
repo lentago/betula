@@ -23,6 +23,7 @@ ENV_KEYS = (
     "CLAUDE_CODE_REMOTE_SESSION_ID",
     "CLAUDE_CODE_BRIDGE_SESSION_ID",
     "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_HOST_SESSION_ID",
 )
 
 
@@ -36,6 +37,11 @@ def pending_record(payload, env):
         "entrypoint": env.get("CLAUDE_CODE_ENTRYPOINT", ""),
         "remote_session_id": env.get("CLAUDE_CODE_REMOTE_SESSION_ID", ""),
         "bridge_session_id": env.get("CLAUDE_CODE_BRIDGE_SESSION_ID", ""),
+        # The desktop app's own session id (local_...), seen on Remote Control
+        # sessions started from a claude.ai project thread. Whether it is per
+        # conversation or per app process is not yet confirmed, so the index
+        # records it beside `links`, never in them (see sync._write_index).
+        "host_session_id": env.get("CLAUDE_CODE_HOST_SESSION_ID", ""),
     }
 
 

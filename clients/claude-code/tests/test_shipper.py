@@ -285,6 +285,38 @@ class TestHook(Base):
         self.assertEqual(rec["surface"], "remote-control")
         self.assertEqual(rec["bridge_session_id"], "cse_bridge1")
 
+    def test_project_thread_rc_env(self):
+        # Env captured from a real project-thread Remote Control session on
+        # xubuntu-ws (Claude Code 2.1.330, 2026-11-22): no bridge/remote vars.
+        env = {"BETULA_CC_STATE_DIR": self.cfg.state_dir, "BETULA_CC_ARCHIVE_DIR": self.archive,
+               "CLAUDE_CODE_ENTRYPOINT": "claude-desktop", "CLAUDE_CODE_CHILD_SESSION": "1",
+               "CLAUDE_CODE_HOST_SESSION_ID": "local_62f5aa9c-3942-4d71-b434-16989fac06d5"}
+        payload = {"session_id": SID, "transcript_path": self.path, "cwd": "/x", "hook_event_name": "Stop"}
+        hook.run(stdin=io.StringIO(json.dumps(payload)), environ=env, spawn=False)
+        cfg = config_mod.load(env, env_files=())
+        with open(hook.pending_path(cfg, SID)) as fh:
+            rec = json.load(fh)
+        self.assertEqual(rec["surface"], "desktop")
+        self.assertEqual(rec["host_session_id"], "local_62f5aa9c-3942-4d71-b434-16989fac06d5")
+        Syncer(self.cfg, pusher=FakePusher()).sync_session(self.path, rec)
+        with open(os.path.join(self.archive, "hostA", "index", SID + ".json")) as fh:
+            idx = json.load(fh)
+        self.assertEqual(idx["host_session_id"], "local_62f5aa9c-3942-4d71-b434-16989fac06d5")
+        self.assertNotIn("local_62f5aa9c-3942-4d71-b434-16989fac06d5", idx["links"])
+
+    def test_shared_host_session_id_does_not_merge(self):
+        host = "local_62f5aa9c-3942-4d71-b434-16989fac06d5"
+        sid_b = "99999999-2222-3333-4444-555555555555"
+        path_b = os.path.join(self.projects, "-home-me-repos", sid_b + ".jsonl")
+        with open(path_b, "w") as fh:
+            fh.write(json.dumps({"type": "assistant", "uuid": "b1", "timestamp": iso(),
+                                 "message": {"content": [{"type": "text", "text": "Other."}]}}) + "\n")
+        s = Syncer(self.cfg, pusher=FakePusher())
+        s.sync_session(self.path, {"session_id": SID, "host_session_id": host})
+        s.sync_session(path_b, {"session_id": sid_b, "host_session_id": host})
+        members = stitch.group(stitch.load_index(self.archive), SID)
+        self.assertEqual([m["session_id"] for m in members], [SID])
+
     def test_surface(self):
         self.assertEqual(surface_from_env({"CLAUDE_CODE_REMOTE": "true"}), "cloud")
         self.assertEqual(surface_from_env({"CLAUDE_CODE_ENTRYPOINT": "sdk-cli"}), "headless")

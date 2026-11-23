@@ -113,6 +113,13 @@ def surface_from_env(env):
     """Which Claude Code surface ran the session, from documented env vars."""
     if str(env.get("CLAUDE_CODE_REMOTE", "")).lower() == "true":
         return "cloud"
+    # `claude remote-control` from a CLI sets the bridge id. Remote Control
+    # started from a claude.ai project thread does not: on Claude Code 2.1.330
+    # it runs as a desktop-app child (entrypoint claude-desktop,
+    # CLAUDE_CODE_CHILD_SESSION=1) with no REMOTE, BRIDGE or CCR variable, so
+    # from inside it is indistinguishable from a local desktop session and is
+    # labelled "desktop". Its index record keeps the app's host_session_id
+    # for manual grouping.
     if env.get("CLAUDE_CODE_BRIDGE_SESSION_ID"):
         return "remote-control"
     ep = env.get("CLAUDE_CODE_ENTRYPOINT", "")
@@ -328,6 +335,11 @@ class Syncer:
             "cwd": cwd,
             "transcript": self._rel(transcript_path),
             "links": [l for l in links if l != sid],
+            # Kept out of `links` on purpose: stitch joins transitively, and
+            # whether this id is per conversation or per desktop-app process
+            # is not yet confirmed. As a link it could merge every session the
+            # app ever ran into one "thread". Recorded for manual grouping.
+            "host_session_id": meta.get("host_session_id") or prev.get("host_session_id", ""),
             "first_seen": prev.get("first_seen") or int(self.now()),
             "last_sync": int(self.now()),
         }
