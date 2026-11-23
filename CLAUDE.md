@@ -77,7 +77,8 @@ betula/
 ├── clients/
 │   ├── README.md                   # Index of collector clients
 │   ├── aws/                        # solidago → Axiom emitters (ALB, CloudWatch Logs)
-│   └── github/                     # GitHub Actions runs/jobs → Loki; systemd timer on LXC 105 (#113)
+│   ├── github/                     # GitHub Actions runs/jobs → Loki; systemd timer on LXC 105 (#113)
+│   └── claude-code/                # Claude Code transcripts → NAS archive + Loki narration; managed-settings hook (ADR-0008)
 ├── terraform/                      # Axiom datasets + retention, and the consumer API tokens (plan on PR, apply on merge; #118, #119)
 ├── cron/
 │   └── user_crontab                # Log cleanup, healthcheck, log rotation, gitops poll, device inventory
