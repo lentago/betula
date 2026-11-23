@@ -18,6 +18,10 @@ from datetime import datetime, timezone
 
 from .redact import redact
 
+# Loki rejects lines over its limit (256 KB by default) with a permanent 400;
+# a narration line that long is noise anyway, so it is cut well under that.
+MAX_LINE = 16 * 1024
+
 # drosera's Alloy stage.replace expression, verbatim (#325): only the value is
 # captured and swapped.
 _ALLOY_SCRUB = re.compile(
@@ -87,4 +91,6 @@ def narration(raw_line):
         return None
     out = _alloy_scrub(out)
     out, _ = redact(out)
+    if len(out) > MAX_LINE:
+        out = out[:MAX_LINE] + " [truncated]"
     return ts, out

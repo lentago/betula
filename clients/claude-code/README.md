@@ -1,5 +1,8 @@
 # betula client: claude-code (session transcripts → NAS archive + Loki narration)
 
+> **Authorship:** Claude wrote this client's code and docs. Chris directed the
+> design and reviewed it.
+
 **What you're about to do:** install a small stdlib-only Python hook on a
 machine that runs Claude Code. From then on, every session on that machine
 copies its transcript to one central archive on the NAS, with secrets
@@ -33,9 +36,16 @@ cc-transcripts sync --session <id>    (one at a time per session; a busy sync is
 - **Fail open, never block.** The hook is `async`, detaches its work, and
   exits 0 on every error. A slow NAS or a dead Loki can't hold a session.
 - **The transcript on disk is the spool.** An unmounted NAS (the archive root
-  doesn't exist) or an unreachable Loki leaves that cursor where it was; the
-  next sync of that session catches up. The shipper never creates the archive
-  root, so it can't write underneath an empty mountpoint.
+  doesn't exist) or an unreachable Loki leaves that cursor where it was. The
+  next hook event in that session catches up. A session that never fires
+  another hook (killed, or closed while the NAS was away) waits until
+  something runs `cc-transcripts sync --all`; `install.sh` doesn't schedule
+  that, so put it on a timer (the kalmia rollout role is the place). The
+  shipper never creates the archive root, so it can't write underneath an
+  empty mountpoint.
+- **Failures are recorded, not printed.** The hook runs detached, so a failing
+  sync writes `last_error` into its cursor file and a line to
+  `~/.local/state/betula-cc/sync.log`. `cc-transcripts status` lists them.
 - **At-least-once** (claytonia ADR-0006): a crash between a write and its
   cursor save repeats lines. `stitch` drops repeats by `uuid`.
 - **No backfill.** `install.sh --apply` seeds every existing transcript first,
@@ -108,6 +118,7 @@ Turn it off with `./install.sh --uninstall`, or just delete
 
 ```bash
 /opt/betula/claude-code/cc-transcripts check                      # resolved config, no secrets
+/opt/betula/claude-code/cc-transcripts status                     # any file whose last sync failed
 /opt/betula/claude-code/cc-transcripts sync --all --days 1 --dry-run
 ls /mnt/lentago/claude-state/transcripts/$(hostname)/index/       # one file per session
 ```
@@ -151,6 +162,15 @@ Same stream as the bullpen's, so the existing dashboard panels pick it up:
 Line: `[TEXT] <narration>  [TOOL] <name>, <name>`, stamped with the
 transcript line's own time. Lines older than `BETULA_CC_LOKI_MAX_AGE_S`
 (default 3600, the Alloy pipeline's `older_than`) go to the archive only.
+Lines are capped at 16 KB so one huge turn can't earn a permanent 400. Subagent
+lines share their parent's stream and can be older than lines already sent;
+Grafana Cloud Loki accepts out-of-order writes within its window, and anything
+it still refuses as out of order is dropped from Loki only (it's in the archive).
+
+`session_id` is a label because the bullpen's stream already carries it
+(drosera's `runner-transcript.alloy`); this client keeps that contract rather
+than forking it. It is one stream per session, which is the same cardinality
+the bullpen already pays.
 `surface` is an addition under ADR-0006 (label contract): existing selectors
 still match; drosera needs no change to keep working.
 
@@ -165,8 +185,3 @@ results and fails if one reaches the Loki body; it also checks the archive
 stays valid JSON after redaction, cursors hold on failure, an unmounted
 archive is never written under, excluded cwds ship nothing, and stitching
 joins two hosts and drops a repeated line.
-
----
-
-Claude wrote this client's code and docs. Chris directed the design and
-reviewed it.

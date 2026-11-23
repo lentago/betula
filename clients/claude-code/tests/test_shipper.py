@@ -99,6 +99,14 @@ class TestRedact(unittest.TestCase):
         out, _ = redact(line)
         self.assertEqual(json.loads(out)["x"], MARK)
 
+    def test_json_keyed_secret_in_tool_input(self):
+        line = json.dumps({"input": {"api_key": "sk_live_abcdefghijk", "password": "hunter22hunter"}})
+        out, n = redact(line)
+        self.assertNotIn("sk_live", out)
+        self.assertNotIn("hunter22", out)
+        self.assertEqual(json.loads(out)["input"]["api_key"], MARK)
+        self.assertEqual(n, 2)
+
     def test_plain_prose_untouched(self):
         line = json.dumps({"t": "We rotate the logs nightly."})
         self.assertEqual(redact(line), (line, 0))
@@ -187,6 +195,50 @@ class TestSync(Base):
         Syncer(self.cfg, pusher=pusher).sync_session(self.path, {"session_id": SID})
         self.assertEqual(len(pusher.events), 1)  # only the line 1s old
         self.assertEqual(len(self.archived()), 6)  # the archive keeps everything
+
+
+    def test_line_longer_than_read_window(self):
+        from cc_transcripts import sync as sync_mod
+        big = {"type": "user", "uuid": "big", "timestamp": iso(), "message": {"content": "x" * 5000}}
+        with open(self.path, "a") as fh:
+            fh.write(json.dumps(big) + "\n")
+        lines, off = sync_mod.read_complete_lines(self.path, 0, limit=64)
+        self.assertEqual(len(lines), 1)  # whole first line, never a partial one
+        old = sync_mod.READ_CHUNK
+        sync_mod.READ_CHUNK = 64
+        try:
+            s = Syncer(self.cfg, pusher=FakePusher())
+            for _ in range(10):
+                s.sync_session(self.path, {"session_id": SID})
+        finally:
+            sync_mod.READ_CHUNK = old
+        self.assertEqual(len(self.archived()), 7)
+
+    def test_labels_and_permanent_error_surface(self):
+        pusher = FakePusher()
+        Syncer(self.cfg, pusher=pusher).sync_session(self.path, {"session_id": SID, "surface": "desktop"})
+        self.assertEqual(set(pusher.events[0][0]),
+                         {"job", "cluster", "worker", "project", "session_id", "surface"})
+        with open(self.path, "a") as fh:
+            fh.write(json.dumps({"type": "assistant", "uuid": "z", "timestamp": iso(),
+                                 "message": {"content": [{"type": "text", "text": "y" * 40000}]}}) + "\n")
+        bad = FakePusher(fail=True)
+        Syncer(self.cfg, pusher=bad).sync_session(self.path, {"session_id": SID})
+        cursors = os.path.join(self.cfg.state_dir, "cursors")
+        errs = [json.load(open(os.path.join(cursors, f))).get("last_error") for f in os.listdir(cursors)]
+        self.assertTrue(any(errs))
+        self.assertTrue(os.path.exists(os.path.join(self.cfg.state_dir, "sync.log")))
+        ok = FakePusher()
+        Syncer(self.cfg, pusher=ok).sync_session(self.path, {"session_id": SID})
+        self.assertLess(len(ok.events[-1][2]), 17 * 1024)  # capped under Loki's line limit
+        errs = [json.load(open(os.path.join(cursors, f))).get("last_error") for f in os.listdir(cursors)]
+        self.assertFalse(any(errs))
+
+    def test_session_id_cannot_escape(self):
+        from cc_transcripts.sync import safe_id
+        self.assertEqual(safe_id("../../etc/passwd"), "etcpasswd")
+        Syncer(self.cfg, pusher=FakePusher()).sync_session(self.path, {"session_id": "../../x"})
+        self.assertTrue(os.path.exists(os.path.join(self.archive, "hostA", "index", "x.json")))
 
 
 class TestStitch(Base):

@@ -16,7 +16,7 @@ import subprocess
 import sys
 
 from . import config as config_mod
-from .sync import surface_from_env
+from .sync import safe_id, surface_from_env
 
 ENV_KEYS = (
     "CLAUDE_CODE_REMOTE",
@@ -40,8 +40,7 @@ def pending_record(payload, env):
 
 
 def pending_path(cfg, session_id):
-    safe = "".join(c for c in session_id if c.isalnum() or c in "-_")
-    return os.path.join(cfg.state_dir, "pending", safe + ".json")
+    return os.path.join(cfg.state_dir, "pending", safe_id(session_id) + ".json")
 
 
 def merge_pending(path, rec):

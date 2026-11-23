@@ -5,6 +5,7 @@
   sync --all [--days N]     Sync every transcript touched in the last N days (timer backstop).
   seed                      Claim every existing transcript without shipping it (no backfill).
   check                     Print the resolved config, secret-free, and exit.
+  status                    List transcript files whose last sync failed (exit 1 if any).
   stitch ID [--merge]       List (or merge into one JSONL) every archived piece of a conversation.
 
 ``--dry-run`` on sync and seed prints what would happen and changes nothing.
@@ -21,7 +22,7 @@ from . import config as config_mod
 from . import hook as hook_mod
 from . import stitch as stitch_mod
 from .loki import LokiPusher
-from .sync import Syncer, find_transcript
+from .sync import Syncer, find_transcript, safe_id
 
 try:
     import fcntl
@@ -58,6 +59,7 @@ def _meta_for(cfg, sid):
 
 
 def cmd_sync_session(cfg, sid, dry_run):
+    sid = safe_id(sid)
     dirty = os.path.join(cfg.state_dir, "pending", sid + ".dirty")
     lock = None if dry_run else _lock(cfg, sid)
     if not dry_run and lock is None:
@@ -93,7 +95,7 @@ def cmd_sync_all(cfg, days, dry_run):
                 continue
         except OSError:
             continue
-        sid = os.path.basename(path)[:-6]
+        sid = safe_id(os.path.basename(path)[:-6])
         slock = None if dry_run else _lock(cfg, sid)
         if not dry_run and slock is None:
             continue  # a hook-started sync has it
@@ -116,6 +118,23 @@ def cmd_seed(cfg, dry_run):
     return 0
 
 
+def cmd_status(cfg):
+    """Surface failures the detached hook can't print (see <state>/sync.log)."""
+    bad = 0
+    for path in sorted(glob.glob(os.path.join(cfg.state_dir, "cursors", "*.json"))):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                st = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        if st.get("last_error"):
+            bad += 1
+            when = time.strftime("%Y-%m-%d %H:%M", time.gmtime(st.get("last_error_at", 0)))
+            print(f"{when}Z  {st.get('path')}\n    {st['last_error']}")
+    print(f"{bad} file(s) failing; log: {os.path.join(cfg.state_dir, 'sync.log')}")
+    return 1 if bad else 0
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="cc_transcripts", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -130,6 +149,7 @@ def main(argv=None):
     sd = sub.add_parser("seed")
     sd.add_argument("--dry-run", action="store_true")
     sub.add_parser("check")
+    sub.add_parser("status")
     st = sub.add_parser("stitch")
     st.add_argument("id")
     st.add_argument("--merge", action="store_true")
@@ -141,6 +161,8 @@ def main(argv=None):
     if args.cmd == "check":
         print(json.dumps(cfg.describe(), indent=1))
         return 0
+    if args.cmd == "status":
+        return cmd_status(cfg)
     if args.cmd == "sync":
         if args.session:
             return cmd_sync_session(cfg, args.session, args.dry_run)

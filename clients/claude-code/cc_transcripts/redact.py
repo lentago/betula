@@ -38,7 +38,7 @@ _KEYWORD = (
     r"private[_-]?key|access[_-]?key|client[_-]?secret)"
 )
 _KV_PATTERN = re.compile(
-    _KEYWORD + r"(?:\\\")?[\s:=]+(?:\\\")?(?:(?:bearer|basic|token)\s+)?(" + _T + r"{6,})"
+    _KEYWORD + r"(?:\\?\")?[\s:=]+(?:\\?\")?(?:(?:bearer|basic|token)\s+)?(" + _T + r"{6,})"
 )
 
 _TOKEN_RE = re.compile("|".join(f"(?:{p})" for p in _TOKEN_PATTERNS), re.DOTALL)

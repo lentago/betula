@@ -57,20 +57,50 @@ def find_transcript(projects_dir, session_id):
     return hits[0] if hits else None
 
 
-def read_complete_lines(path, offset, limit=READ_CHUNK):
-    """``(lines, new_offset)``; ``lines`` are str without the newline."""
+def read_complete_lines(path, offset, limit=None):
+    """``(lines, new_offset)``; ``lines`` are str without the newline.
+
+    Reads about ``limit`` bytes, but never stops inside a line: a single line
+    longer than ``limit`` (an inline image, a huge tool result) is read whole,
+    so one big line can't wedge the cursor.
+    """
+    limit = limit or READ_CHUNK
     with open(path, "rb") as fh:
         size = os.fstat(fh.fileno()).st_size
         if offset > size:  # file was replaced or truncated: start over
             offset = 0
         fh.seek(offset)
         data = fh.read(limit)
+        while data and b"\n" not in data:
+            more = fh.read(limit)
+            if not more:
+                break
+            data += more
     end = data.rfind(b"\n")
     if end < 0:
         return [], offset
     chunk = data[: end + 1]
     lines = [l.decode("utf-8", "replace") for l in chunk.split(b"\n")[:-1]]
     return lines, offset + len(chunk)
+
+
+def safe_id(value):
+    """A session id as a single path component (no ``/``, no ``..``)."""
+    out = "".join(c for c in str(value) if c.isalnum() or c in "-_")
+    return out or "unknown"
+
+
+def log_error(state_dir, msg, max_bytes=1_000_000):
+    """Append to ``<state>/sync.log`` (rotated at 1 MB). Best effort."""
+    try:
+        os.makedirs(state_dir, exist_ok=True)
+        path = os.path.join(state_dir, "sync.log")
+        if os.path.exists(path) and os.path.getsize(path) > max_bytes:
+            os.replace(path, path + ".1")
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {msg}\n")
+    except OSError:
+        pass
 
 
 def project_label(cwd):
@@ -220,6 +250,13 @@ class Syncer:
 
         if not self.dry_run:
             st["updated"] = int(self.now())
+            if res["errors"]:
+                st["last_error"] = "; ".join(res["errors"])[:500]
+                st["last_error_at"] = int(self.now())
+                log_error(self.cfg.state_dir, f"{path}: {st['last_error']}")
+            else:
+                st.pop("last_error", None)
+                st.pop("last_error_at", None)
             _atomic_write_json(spath, st)
         return res
 
@@ -277,7 +314,7 @@ class Syncer:
         return len(events), new_off
 
     def _write_index(self, transcript_path, meta, cwd):
-        sid = meta.get("session_id") or os.path.basename(transcript_path)[:-6]
+        sid = safe_id(meta.get("session_id") or os.path.basename(transcript_path)[:-6])
         path = os.path.join(self.cfg.archive_dir, self.cfg.host, "index", f"{sid}.json")
         prev = _load_json(path, {})
         links = sorted(set(prev.get("links", [])) | set(first_lines_links(transcript_path)) |
