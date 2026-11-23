@@ -1,0 +1,39 @@
+# ============================================================================
+# Claude Code Client Unit Tests
+# ============================================================================
+# Runs the stdlib-only unit suite for the Claude Code transcript client
+# (clients/claude-code, ADR-0008). The suite uses temp dirs and a fake Loki, so it
+# needs no tokens and no network.
+#
+# Path-filtered to clients/claude-code/** to stay cheap, so, like
+# aws-client-tests.yml, this must NOT be marked a required status check: a
+# required check whose workflow never triggers on a given PR is held
+# "Expected" forever, deadlocking that PR. Leave it informational/unrequired.
+# ============================================================================
+
+name: Claude Code Client Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+    paths:
+      - 'clients/claude-code/**'
+      - '.github/workflows/claude-code-client-tests.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # install.sh's floor is 3.8, but setup-python no longer offers it on
+        # ubuntu-latest; 3.10 is the oldest the fleet runs, 3.12 matches the aws suite.
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Run unit tests (Python ${{ matrix.python }})
+        working-directory: clients/claude-code
+        run: python3 -m unittest discover -s tests

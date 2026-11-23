@@ -20,3 +20,4 @@
 | [0005](0005-retry-limit-false.md) | `Retry_Limit False` on every Fluent Bit output | Accepted | 2026-05-28 |
 | [0006](0006-loki-label-contract.md) | Low-cardinality Loki stream-label contract | Accepted | circa 2026-06-10 |
 | [0007](0007-visitor-ip-truncation.md) | Visitor-IP truncation at parse time; hashing rejected | Accepted | 2026-07-25 |
+| [0008](0008-claude-code-transcripts.md) | Claude Code transcripts: full copy on the NAS, narration in Loki, by hook | Proposed | 2026-11-22 |
