@@ -30,6 +30,9 @@ except ImportError:  # Windows: no flock; sync still works, just uncoalesced
     fcntl = None
 
 
+SETTLE_S = float(os.environ.get("BETULA_CC_SETTLE_S", "2"))
+
+
 def _lock(cfg, name):
     if fcntl is None:
         return object()
@@ -80,6 +83,15 @@ def cmd_sync_session(cfg, sid, dry_run):
         if not os.path.exists(dirty):
             break
         os.remove(dirty)
+    # Claude Code writes the transcript asynchronously, so it can lag the
+    # conversation (docs: hooks, transcript_path). Read once more after a short
+    # wait so a turn's last line isn't left for the next hook, or lost when a
+    # cloud container is reclaimed after SessionEnd. Detached: costs no session time.
+    time.sleep(SETTLE_S)
+    meta = _meta_for(cfg, sid)
+    path = meta.get("transcript_path") or find_transcript(cfg.projects_dir, sid)
+    if path:
+        syncer.sync_session(path, dict(meta, session_id=sid))
     return 0
 
 
