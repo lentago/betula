@@ -285,6 +285,23 @@ class TestHook(Base):
         self.assertEqual(rec["surface"], "remote-control")
         self.assertEqual(rec["bridge_session_id"], "cse_bridge1")
 
+    def test_project_thread_rc_env(self):
+        # Env captured from a real project-thread Remote Control session on
+        # xubuntu-ws (Claude Code 2.1.330, 2026-11-22): no bridge/remote vars.
+        env = {"BETULA_CC_STATE_DIR": self.cfg.state_dir, "BETULA_CC_ARCHIVE_DIR": self.archive,
+               "CLAUDE_CODE_ENTRYPOINT": "claude-desktop", "CLAUDE_CODE_CHILD_SESSION": "1",
+               "CLAUDE_CODE_HOST_SESSION_ID": "local_62f5aa9c-3942-4d71-b434-16989fac06d5"}
+        payload = {"session_id": SID, "transcript_path": self.path, "cwd": "/x", "hook_event_name": "Stop"}
+        hook.run(stdin=io.StringIO(json.dumps(payload)), environ=env, spawn=False)
+        cfg = config_mod.load(env, env_files=())
+        with open(hook.pending_path(cfg, SID)) as fh:
+            rec = json.load(fh)
+        self.assertEqual(rec["surface"], "desktop")
+        self.assertEqual(rec["host_session_id"], "local_62f5aa9c-3942-4d71-b434-16989fac06d5")
+        Syncer(self.cfg, pusher=FakePusher()).sync_session(self.path, rec)
+        with open(os.path.join(self.archive, "hostA", "index", SID + ".json")) as fh:
+            self.assertIn("local_62f5aa9c-3942-4d71-b434-16989fac06d5", json.load(fh)["links"])
+
     def test_surface(self):
         self.assertEqual(surface_from_env({"CLAUDE_CODE_REMOTE": "true"}), "cloud")
         self.assertEqual(surface_from_env({"CLAUDE_CODE_ENTRYPOINT": "sdk-cli"}), "headless")

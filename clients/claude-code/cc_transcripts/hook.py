@@ -23,6 +23,7 @@ ENV_KEYS = (
     "CLAUDE_CODE_REMOTE_SESSION_ID",
     "CLAUDE_CODE_BRIDGE_SESSION_ID",
     "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_HOST_SESSION_ID",
 )
 
 
@@ -36,6 +37,10 @@ def pending_record(payload, env):
         "entrypoint": env.get("CLAUDE_CODE_ENTRYPOINT", ""),
         "remote_session_id": env.get("CLAUDE_CODE_REMOTE_SESSION_ID", ""),
         "bridge_session_id": env.get("CLAUDE_CODE_BRIDGE_SESSION_ID", ""),
+        # The desktop app's own session id (local_...). Every session the app
+        # runs, including Remote Control from a claude.ai project thread,
+        # carries it; it is the only id that ties those back together.
+        "host_session_id": env.get("CLAUDE_CODE_HOST_SESSION_ID", ""),
     }
 
 

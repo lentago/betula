@@ -21,7 +21,7 @@ from . import render
 from .redact import redact
 
 READ_CHUNK = 8 * 1024 * 1024  # cap one pass so a huge backlog can't stall a host
-UUID_ISH = re.compile(r"^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|cse_[A-Za-z0-9]+|session_[A-Za-z0-9]+)$")
+UUID_ISH = re.compile(r"^(?:(?:local_)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|cse_[A-Za-z0-9]+|session_[A-Za-z0-9]+)$")
 LINK_KEY = re.compile(r"(?i)session|parent|derived|fork|origin|source")
 
 
@@ -113,6 +113,13 @@ def surface_from_env(env):
     """Which Claude Code surface ran the session, from documented env vars."""
     if str(env.get("CLAUDE_CODE_REMOTE", "")).lower() == "true":
         return "cloud"
+    # `claude remote-control` from a CLI sets the bridge id. Remote Control
+    # started from a claude.ai project thread does not: on Claude Code 2.1.330
+    # it runs as a desktop-app child (entrypoint claude-desktop,
+    # CLAUDE_CODE_CHILD_SESSION=1) with no REMOTE, BRIDGE or CCR variable, so
+    # from inside it is indistinguishable from a local desktop session and is
+    # labelled "desktop". Its host_session_id link still groups it with the
+    # app session that launched it.
     if env.get("CLAUDE_CODE_BRIDGE_SESSION_ID"):
         return "remote-control"
     ep = env.get("CLAUDE_CODE_ENTRYPOINT", "")
@@ -318,7 +325,8 @@ class Syncer:
         path = os.path.join(self.cfg.archive_dir, self.cfg.host, "index", f"{sid}.json")
         prev = _load_json(path, {})
         links = sorted(set(prev.get("links", [])) | set(first_lines_links(transcript_path)) |
-                       {v for v in (meta.get("remote_session_id"), meta.get("bridge_session_id")) if v})
+                       {v for v in (meta.get("remote_session_id"), meta.get("bridge_session_id"),
+                                 meta.get("host_session_id")) if v})
         rec = {
             "schema": 1,
             "host": self.cfg.host,

@@ -82,7 +82,7 @@ about where the session runs, not what it reads.
 | Surface | Covered? | How | Confidence |
 |---|---|---|---|
 | Local CLI, desktop app, IDE | yes | managed-settings drop-in | verified: docs say managed settings apply; hook tested end-to-end in a container |
-| Remote Control on a LAN host | yes | same drop-in; the session runs locally | inferred: docs say RC runs the local process, not that it loads hooks; `CLAUDE_CODE_BRIDGE_SESSION_ID` is documented for hooks during RC |
+| Remote Control on a LAN host | yes | same drop-in; the session runs locally | verified on xubuntu-ws 2026-11-22 (Claude Code 2.1.330) |
 | `claude -p` / Agent SDK on a host | yes | managed settings load regardless of `settingSources` | verified in docs |
 | Bullpen workers (claytonia) | already covered | drosera's Alloy shipper + NAS `logs/` | verified in repos; `install.sh` refuses `claude-runner*` hosts |
 | Cloud sessions with one repo | not yet | needs a repo-committed hook, an allowlisted Loki host, and a token in the environment | verified in docs; this container got `403` from the proxy for `*.grafana.net` |
@@ -128,6 +128,15 @@ lines carry a `surface` label (`cli`, `desktop`, `ide`, `remote-control`,
 `headless`, `cloud`); the bullpen's don't, so `{job="claude_transcript", surface=""}`
 is the bullpen alone.
 
+**`surface` names the launcher, not the route you watched it through.** A
+session started by `claude remote-control` from a CLI is `remote-control`
+(Claude Code sets `CLAUDE_CODE_BRIDGE_SESSION_ID`). One started over Remote
+Control from a claude.ai project thread is `desktop`: it runs as a child of
+the desktop app with no remote or bridge variable, so nothing inside it can
+tell it from a local desktop session (verified on Claude Code 2.1.330). Its
+index record does carry the desktop app's `local_…` host session id in
+`links`, which groups it with the other sessions that app ran.
+
 ## Put a conversation back together
 
 ```bash
@@ -136,7 +145,8 @@ cc-transcripts stitch <id> --merge > thread.jsonl                     # one time
 ```
 
 Each host's index names every id it saw: the local session id, the cloud
-session id, the Remote Control bridge id, and any id-shaped value in the
+session id, the Remote Control bridge id, the desktop app's host session id,
+and any id-shaped value in the
 transcript's first lines. Records that share one are joined. Merged lines carry
 `_betula: {host, surface, file}`.
 
